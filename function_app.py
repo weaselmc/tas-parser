@@ -21,4 +21,8 @@ app = func.FunctionApp()
 
 @app.route(route="hello")
 def hello(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse("Hello World")
+
+    if IMPORT_OK:
+        return func.HttpResponse(f"Import OK. {STATUS}")
+    else:
+        return func.HttpResponse(IMPORT_ERROR)
