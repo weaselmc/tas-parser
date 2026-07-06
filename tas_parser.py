@@ -13,7 +13,7 @@ class TASDoc:
         
         if isinstance(source, bytes):
             self.source = BytesIO(source)        
-        self.doc = Document(source)
+        self.doc = Document(self.source)
 
         self.tables = self._load_tables()
         self.template = self._detect_template()
