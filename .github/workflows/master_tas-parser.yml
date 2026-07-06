@@ -67,19 +67,11 @@ jobs:
         run: |
           unzip release.zip
           rm release.zip
-        
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_7E6429550F724CA2BC4D80510F0A3B10 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A2863B5BAEF34750A48CAF93BC1397F7 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F217C70BC1A84ADEB26631851D75D818 }}
 
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
         id: deploy-to-function
-        with:
-          app-name: 'tas-parser'
-          slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          
+        with:          
+          app-name: tas-parser
+          package: .
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
