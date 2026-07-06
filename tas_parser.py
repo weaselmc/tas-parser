@@ -860,7 +860,6 @@ class TASDoc:
     def to_lists(self):
 
         return {
-            "file": self.filename,
             "template": self.template,
             "qualification": self.qualification,
             "delivery": self.delivery,
