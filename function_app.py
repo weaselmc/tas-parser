@@ -3,10 +3,12 @@ import base64
 
 import azure.functions as func
 
+print("FUNCTION_APP_IMPORTING")
+
 from tas_parser import TASDoc
 
 app = func.FunctionApp()
-
+print("FUNCTION_APP_CREATED")
 
 @app.route(
     route="parse-tas",
