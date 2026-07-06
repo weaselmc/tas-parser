@@ -1,5 +1,14 @@
 
-print("FUNCTION_APP_IMPORTING")
+
+import traceback
+
+try:
+    import tas_parser
+    IMPORT_OK = True
+except Exception as ex:
+    IMPORT_OK = False
+    IMPORT_ERROR = traceback.format_exc()
+
 import azure.functions as func
 import tas_parser
 
