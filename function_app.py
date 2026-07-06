@@ -10,7 +10,12 @@ except Exception as ex:
     IMPORT_ERROR = traceback.format_exc()
 
 import azure.functions as func
-import tas_parser
+
+try:
+    from docx import Document
+    STATUS = "docx imported OK"
+except Exception as ex:
+    STATUS = str(ex)
 
 app = func.FunctionApp()
 
