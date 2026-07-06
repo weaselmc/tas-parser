@@ -875,11 +875,6 @@ class TASDoc:
                 self.qualification_units.values()
             ),
             "trainers":
-                self.get_trainers(),
-
-            "assessment_matrices":
-                self.get_assessment_matrices(),
-
-            "assessment_calendars":
-                self.get_assessment_calendars()
+                self.get_trainers()
+         
         }
