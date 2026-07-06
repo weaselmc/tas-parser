@@ -35,13 +35,30 @@ jobs:
           source venv/bin/activate
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+
+      - name: Verify docx package
+        run: |
+          ls -la .python_packages/lib/site-packages
+          find .python_packages -type d -name docx
 
       # Optional: Add step to run tests here
 
       - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+        run: zip -r release.zip .
 
+      - name: Check zip contents
+        run: |
+          unzip -l release.zip | grep ".python_packages" || true
+          unzip -l release.zip | grep "/docx/" || true
+      - name: Count python_packages files
+        run: |
+          unzip -l release.zip | grep python_packages | wc -l
+        
+      - name: Show docx in zip
+        run: |
+          unzip -l release.zip | grep "site-packages/docx" | head
+            
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
