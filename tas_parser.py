@@ -860,11 +860,15 @@ class TASDoc:
     def make_cluster_unit_id(self, cluster_key, state_code):
 
         parts = re.findall(
-            r'(?:^|[-_])([a-z])',
+            r'(?:^|[-_])([a-z])|(?:^|[-_])(\d+)',
             cluster_key
         )
 
-        acronym = ''.join(parts).upper()
+        acronym = ''.join(
+            letter or number
+            for letter, number in parts
+        ).upper()
+
 
         return f"{acronym}-{state_code}"
 
