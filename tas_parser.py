@@ -889,6 +889,7 @@ class TASDoc:
             self.qualification_units[
                 (qualification_code, unit["state_code"])
             ] = {
+                "qualificationUnitId": f"{qualification_code}-{unit['state_code']}",
                 "qualificationCode": qualification_code,
                 "unitCode": unit["state_code"],
                 "coreElective": unit["core_elective"],
