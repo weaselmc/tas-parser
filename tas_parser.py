@@ -857,6 +857,18 @@ class TASDoc:
 
         return " ".join(words)
     
+    def make_cluster_unit_id(self, cluster_key, state_code):
+
+        parts = re.findall(
+            r'(?:^|[-_])([a-z])',
+            cluster_key
+        )
+
+        acronym = ''.join(parts).upper()
+
+        return f"{acronym}-{state_code}"
+
+    
     def build_relationships(self):
 
         self.clusters = {}
@@ -904,6 +916,8 @@ class TASDoc:
             self.cluster_units[
                 (cluster_key, unit["state_code"])
             ] = {
+                "clusterUnitId": self.make_cluster_unit_id
+                    (cluster_key, unit["state_code"]),
                 "clusterKey": cluster_key,
                 "stateCode": unit["state_code"]
             }            
