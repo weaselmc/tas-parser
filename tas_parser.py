@@ -841,6 +841,11 @@ class TASDoc:
                 continue
 
             lower = word.lower()
+            
+            # Preserve acronyms adn oddly cased words
+            if any(c.isupper() for c in word[1:]):
+                words.append(word)
+                continue
 
             if (
                 i > 0
