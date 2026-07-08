@@ -791,6 +791,67 @@ class TASDoc:
 
         return cluster_name.strip("-")
     
+    def make_folder_name(self, cluster_name):
+
+        joining_words = {
+            "and",
+            "or",
+            "of",
+            "the",
+            "for",
+            "to",
+            "in",
+            "on",
+            "at",
+            "by",
+            "with"
+        }
+
+        cluster_name = html.unescape(cluster_name)
+
+        # Separate letters and numbers
+        cluster_name = re.sub(
+            r'([a-zA-Z])(\d+)',
+            r'\1 \2',
+            cluster_name
+        )
+
+        # Replace special chars with separator
+        cluster_name = re.sub(
+            r'[^A-Za-z0-9 ]+',
+            ' - ',
+            cluster_name
+        )
+
+        # Collapse multiples
+        cluster_name = re.sub(
+            r'(?:\s*-\s*)+',
+            ' - ',
+            cluster_name
+        )
+
+        cluster_name = ' '.join(cluster_name.split())
+
+        words = []
+
+        for i, word in enumerate(cluster_name.split()):
+
+            if word == "-":
+                words.append(word)
+                continue
+
+            lower = word.lower()
+
+            if (
+                i > 0
+                and lower in joining_words
+            ):
+                words.append(lower)
+            else:
+                words.append(lower.capitalize())
+
+        return " ".join(words)
+    
     def build_relationships(self):
 
         self.clusters = {}
@@ -819,10 +880,12 @@ class TASDoc:
                 continue
 
             cluster_key = self.make_cluster_key(cluster_name)
+            cluster_folder = self.make_folder_name(cluster_name)
 
             self.clusters[cluster_key] = {
                 "clusterKey": cluster_key,
-                "clusterName": cluster_name
+                "clusterName": cluster_name,
+                "clusterFolder": cluster_folder
             }
 
             self.qualification_clusters[
