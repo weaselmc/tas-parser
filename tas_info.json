@@ -1,0 +1,324 @@
+{
+    "type": "object",
+    "properties": {
+        "template": {
+            "type": "string"
+        },
+        "qualification": {
+            "type": "object",
+            "properties": {
+                "training_package": {
+                    "type": "object",
+                    "properties": {
+                        "code": {},
+                        "title": {
+                            "type": "string"
+                        },
+                        "release_number": {
+                            "type": "string"
+                        },
+                        "release_date": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "qualification": {
+                    "type": "object",
+                    "properties": {
+                        "national_code": {
+                            "type": "string"
+                        },
+                        "title": {
+                            "type": "string"
+                        },
+                        "release_number": {
+                            "type": "string"
+                        },
+                        "release_date": {
+                            "type": "string"
+                        },
+                        "state_code": {
+                            "type": "string"
+                        },
+                        "on_scope": {
+                            "type": "boolean"
+                        }
+                    }
+                }
+            }
+        },
+        "delivery": {
+            "type": "object",
+            "properties": {
+
+                "title": {
+                "type": ["string", "null"]
+                },
+
+                "qualification_state_code": {
+                "type": ["string", "null"]
+                },
+
+                "qualification_classification": {
+                "type": ["string", "null"]
+                },
+
+                "campus": {
+                "type": ["string", "null"]
+                },
+
+                "campus_code": {
+                "type": ["string", "null"]
+                },
+
+                "delivery_type": {
+                "type": ["string", "null"]
+                },
+
+                "enrolment_type": {
+                "type": ["string", "null"]
+                },
+
+                "enrolment_code": {
+                "type": ["string", "null"]
+                },
+
+                "duration": {
+                "type": ["string", "null"]
+                },
+
+                "start_date": {
+                "type": ["string", "null"]
+                },
+
+                "finish_date": {
+                "type": ["string", "null"]
+                },
+
+                "semester": {
+                "type": ["string", "null"]
+                },
+
+                "year": {
+                "type": ["integer", "null"]
+                },
+
+                "stages": {
+                "type": ["integer", "null"]
+                },
+
+                "template_version": {
+                "type": ["string", "null"]
+                },
+
+                "version_number": {
+                "type": ["string", "null"]
+                },
+
+                "approval_status": {
+                "type": ["string", "null"]
+                }
+            }
+        },
+        "delivery_content": {
+            "type": "object",
+            "properties": {
+                "program_overview": {
+                    "type": ["string", "null"]
+                },
+                "industry_engagement": {
+                    "type": ["string", "null"]
+                },
+                "learner_cohort": {
+                    "type": ["string", "null"]
+                },
+                "delivery_rationale": {
+                    "type": ["string", "null"]
+                },
+                "amount_of_training": {
+                    "type": ["string", "null"]
+                },
+                "learning_resources": {
+                    "type": ["string", "null"]
+                },
+                "facilities_equipment": {
+                    "type": ["string", "null"]
+                },
+                "learner_support": {
+                    "type": ["string", "null"]
+                },
+                "pathways": {
+                    "type": ["string", "null"]
+                },
+                "continuous_improvement": {
+                    "type": ["string", "null"]
+                },
+                "qualification_classification": {
+                    "type": ["string", "null"]
+                },
+                "industry_meeting_date": {
+                    "type": ["string", "null"]
+                },
+                "review_date": {
+                    "type": ["string", "null"]
+                },
+                "current_as_at_date": {
+                    "type": ["string", "null"]
+                }
+            }
+        },
+        "units": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "stage": {
+                        "type": "integer"
+                    },
+                    "cluster": {},
+                    "national_code": {
+                        "type": "string"
+                    },
+                    "state_code": {
+                        "type": "string"
+                    },
+                    "unit_title": {
+                        "type": "string"
+                    },
+                    "nominal_hours": {
+                        "type": "string"
+                    },
+                    "delivery_mode": {
+                        "type": "string"
+                    },
+                    "core_elective": {
+                        "type": "string"
+                    },
+                    "elective_group": {}
+                },
+                "required": [
+                    "stage",
+                    "cluster",
+                    "national_code",
+                    "state_code",
+                    "unit_title",
+                    "nominal_hours",
+                    "delivery_mode",
+                    "core_elective",
+                    "elective_group"
+                ]
+            }
+        },
+        "clusters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "clusterKey": {
+                        "type": "string"
+                    },
+                    "clusterName": {
+                        "type": "string"
+                    },
+                    "clusterFolder": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "clusterKey",
+                    "clusterName",
+                    "clusterFolder"
+                ]
+            }
+        },
+        "qualification_clusters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "qualificationCode": {
+                        "type": "string"
+                    },
+                    "clusterKey": {
+                        "type": "string"
+                    },
+                    "stage": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "qualificationCode",
+                    "clusterKey",
+                    "stage"
+                ]
+            }
+        },
+        "cluster_units": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "clusterKey": {
+                        "type": "string"
+                    },
+                    "stateCode": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "clusterKey",
+                    "stateCode"
+                ]
+            }
+        },
+        "qualification_units": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "qualificationUnitId": {
+                        "type": "string"
+                    },
+                    "qualificationCode": {
+                        "type": "string"
+                    },
+                    "unitCode": {
+                        "type": "string"
+                    },
+                    "coreElective": {
+                        "type": "string"
+                    },
+                    "electiveGroup": {}
+                },
+                "required": [
+                    "qualificationCode",
+                    "unitCode",
+                    "coreElective",
+                    "electiveGroup"
+                ]
+            }
+        },
+        "trainers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "national_code": {
+                        "type": "string"
+                    },
+                    "unit_title": {
+                        "type": "string"
+                    },
+                    "trainer_assessor": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "national_code",
+                    "unit_title",
+                    "trainer_assessor"
+                ]
+            }
+        }
+    }
+}

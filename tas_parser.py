@@ -228,6 +228,109 @@ class TASDoc:
     # =====================================================
     # DELIVERY DETAILS
     # =====================================================
+    def get_qualification_classification(self):
+
+        for table in self.tables:
+
+            rows = table["rows"]
+
+            if (
+                rows
+                and "qualification classification"
+                in " ".join(rows[0]).lower()
+            ):
+
+                docx_table = table["table"]
+
+                mapping = {
+                    1: "A",
+                    2: "B",
+                    3: "C"
+                }
+
+                for col, classification in mapping.items():
+
+                    cell_xml = (
+                        docx_table.rows[0]
+                        .cells[col]
+                        ._tc.xml
+                    )
+
+                    if (
+                        'w14:checked w14:val="1"'
+                        in cell_xml
+                    ):
+                        return classification
+
+        return None
+    
+    def get_enrolment_type(self):
+
+        for table in self.tables:
+
+            rows = table["rows"]
+
+            if not rows:
+                continue
+
+            table_text = " ".join(
+                " ".join(row)
+                for row in rows
+            ).lower()
+
+            if (
+                "full time" in table_text
+                and "part time" in table_text
+            ):
+
+                docx_table = table["table"]
+
+                checkbox_row = docx_table.rows[0]
+
+                #
+                # Full Time
+                #
+
+                if (
+                    'w14:checked w14:val="1"'
+                    in checkbox_row.cells[0]._tc.xml
+                ):
+                    return "Full Time"
+
+                #
+                # Part Time
+                #
+
+                if (
+                    'w14:checked w14:val="1"'
+                    in checkbox_row.cells[1]._tc.xml
+                ):
+                    return "Part Time"
+
+                #
+                # Other
+                #
+
+                if (
+                    'w14:checked w14:val="1"'
+                    in checkbox_row.cells[2]._tc.xml
+                ):
+
+                    return self.get_other_enrolment_value(
+                        checkbox_row.cells[2]
+                    )
+
+                #
+                # Third Party
+                #
+
+                if (
+                    'w14:checked w14:val="1"'
+                    in checkbox_row.cells[3]._tc.xml
+                ):
+                    return "Third Party"
+
+        return None
 
     def get_delivery(self):
 
@@ -235,13 +338,14 @@ class TASDoc:
             "title": None,
 
             "qualification_state_code": None,
+            "qualification_classification": self.get_qualification_classification(self),
 
             "campus": None,
             "campus_code": None,
 
             "delivery_type": None,
 
-            "enrolment_type": None,
+            "enrolment_type": self.get_enrolment_type(self),
             "enrolment_code": None,
 
             "duration": None,
@@ -320,17 +424,7 @@ class TASDoc:
                     ):
 
                         result["campus"] = value
-
-                    #
-                    # Enrolment Type
-                    #
-                    elif (
-                        "enrolment type" in label
-                        or "training mode" in label
-                    ):
-
-                        result["enrolment_type"] = value
-
+                    
                     #
                     # Number of Stages
                     #
@@ -404,8 +498,20 @@ class TASDoc:
         elif "trainee" in enrolment:
             result["enrolment_code"] = "TRN"
 
+        elif "third" in enrolment: 
+            result["enrolment_code"] = "TP"
+
+        elif "pre-apprent" in enrolment:
+            result["enrolment_code"] = "PREAPP"
+
+        elif "vet in schools" in enrolment:
+            result["enrolment_code"] = "VETIS"
+
+        elif "fee" in enrolment:
+            result["enrolment_code"] = "FFS"
+            
         else:
-            result["enrolment_code"] = "OT"
+            result["enrolment_code"] = "UNK"
 
         #
         # Template Version
@@ -504,22 +610,11 @@ class TASDoc:
 
             lower_text = table_text.lower()
 
-            #
-            # Qualification Classification
-            #
-            if (
-                "qualification classification"
-                in lower_text
-            ):
-
-                result[
-                    "qualification_classification"
-                ] = table_text
-
+            
             #
             # Program Overview / Industry
             #
-            elif (
+            if (
                 "program overview"
                 in lower_text
             ):
