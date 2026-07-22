@@ -21,6 +21,7 @@ class TASDoc:
         # Parsed data
         self.qualification = None
         self.delivery = None
+        self.delivery_content = None
         self.units = None
         
         self.trainers = None
@@ -231,10 +232,31 @@ class TASDoc:
     def get_delivery(self):
 
         result = {
-            "delivery": None,
+            "title": None,
+
+            "qualification_state_code": None,
+
+            "campus": None,
+            "campus_code": None,
+
+            "delivery_type": None,
+
+            "enrolment_type": None,
+            "enrolment_code": None,
+
             "duration": None,
+
             "start_date": None,
-            "finish_date": None
+            "finish_date": None,
+
+            "semester": None,
+            "year": None,
+
+            "stages": None,
+
+            "template_version": None,
+            "version_number": None,
+            "approval_status": None
         }
 
         for table in self.tables:
@@ -252,6 +274,9 @@ class TASDoc:
 
                     value = row[i + 1].strip()
 
+                    #
+                    # Duration / Dates
+                    #
                     if label == "duration":
 
                         result["duration"] = value
@@ -269,24 +294,399 @@ class TASDoc:
 
                             result["start_date"] = (
                                 datetime.fromisoformat(
-                                    dates[0].replace("Z", "+00:00")
+                                    dates[0].replace(
+                                        "Z",
+                                        "+00:00"
+                                    )
                                 ).date()
                             )
 
                             result["finish_date"] = (
                                 datetime.fromisoformat(
-                                    dates[1].replace("Z", "+00:00")
+                                    dates[1].replace(
+                                        "Z",
+                                        "+00:00"
+                                    )
                                 ).date()
                             )
 
+                    #
+                    # Campus
+                    #
                     elif (
-                            "campus" in label
-                            or "delivery location" in label
-                            or "delivery site" in label
-                        ):
-                            result["delivery"] = value
+                        "campus" in label
+                        or "delivery location" in label
+                        or "delivery site" in label
+                    ):
+
+                        result["campus"] = value
+
+                    #
+                    # Enrolment Type
+                    #
+                    elif (
+                        "enrolment type" in label
+                        or "training mode" in label
+                    ):
+
+                        result["enrolment_type"] = value
+
+                    #
+                    # Number of Stages
+                    #
+                    elif label in [
+                        "number of stages",
+                        "stages",
+                        "no. of stages"
+                    ]:
+
+                        try:
+                            result["stages"] = int(value)
+                        except ValueError:
+                            pass
+
+        #
+        # Derived Values
+        #
+
+        start_date = result["start_date"]
+
+        if start_date:
+
+            result["year"] = start_date.year
+
+            result["semester"] = (
+                "S1"
+                if start_date.month <= 6
+                else "S2"
+            )
+
+        #
+        # Campus Code
+        #
+
+        campus = (
+            result["campus"] or ""
+        ).lower()
+
+        if "joondalup" in campus:
+            result["campus_code"] = "J"
+
+        elif "perth" in campus:
+            result["campus_code"] = "P"
+
+        elif "midland" in campus:
+            result["campus_code"] = "M"
+
+        elif "clarkson" in campus:
+            result["campus_code"] = "C"
+
+        else:
+            result["campus_code"] = "UNK"
+
+        #
+        # Enrolment Code
+        #
+
+        enrolment = (
+            result["enrolment_type"] or ""
+        ).lower()
+
+        if "full" in enrolment:
+            result["enrolment_code"] = "FT"
+
+        elif "part" in enrolment:
+            result["enrolment_code"] = "PT"
+
+        elif "apprent" in enrolment:
+            result["enrolment_code"] = "APP"
+
+        elif "trainee" in enrolment:
+            result["enrolment_code"] = "TRN"
+
+        else:
+            result["enrolment_code"] = "OT"
+
+        #
+        # Template Version
+        #
+
+        result["template_version"] = (
+            "11.0"
+            if self.template == "new"
+            else "10.0"
+        )
+
+        #
+        # Delivery Title
+        #
+
+        if self.qualification:
+
+            qual = self.qualification.get(
+                "qualification",
+                {}
+            )
+
+            national_code = qual.get(
+                "national_code",
+                "UNKNOWN"
+            )
+
+            state_code = qual.get(
+                "state_code",
+                "UNKNOWN"
+            )
+
+            result[
+                "qualification_state_code"
+            ] = state_code
+
+            if (
+                result["year"]
+                and result["semester"]
+            ):
+
+                result["title"] = (
+                    f"{national_code}-"
+                    f"{state_code}-"
+                    f"{result['campus_code']}-"
+                    f"{result['enrolment_code']}-"
+                    f"{result['year']}-"
+                    f"{result['semester']}"
+                )
 
         return result
+    
+    def get_delivery_content(self):
+
+        result = {
+            "program_overview": None,
+
+            "industry_engagement": None,
+
+            "learner_cohort": None,
+
+            "delivery_rationale": None,
+
+            "amount_of_training": None,
+
+            "learning_resources": None,
+
+            "facilities_equipment": None,
+
+            "learner_support": None,
+
+            "pathways": None,
+
+            "continuous_improvement": None,
+
+            "qualification_classification": None,
+
+            "industry_meeting_date": None,
+
+            "review_date": None,
+
+            "current_as_at_date": None
+        }
+
+        for table in self.tables:
+
+            rows = table["rows"]
+
+            if not rows:
+                continue
+
+            table_text = "\n".join(
+                " ".join(row)
+                for row in rows
+            )
+
+            lower_text = table_text.lower()
+
+            #
+            # Qualification Classification
+            #
+            if (
+                "qualification classification"
+                in lower_text
+            ):
+
+                result[
+                    "qualification_classification"
+                ] = table_text
+
+            #
+            # Program Overview / Industry
+            #
+            elif (
+                "program overview"
+                in lower_text
+            ):
+
+                result[
+                    "program_overview"
+                ] = table_text
+
+                #
+                # Try to capture meeting date
+                #
+                match = re.search(
+                    r"industry advisory committee met on (\d{1,2}/\d{1,2}/\d{4})",
+                    lower_text
+                )
+
+                if match:
+
+                    result[
+                        "industry_meeting_date"
+                    ] = match.group(1)
+
+            #
+            # Learner Cohort
+            #
+            elif (
+                "learners are expected"
+                in lower_text
+                or
+                "learner cohort"
+                in lower_text
+            ):
+
+                result[
+                    "learner_cohort"
+                ] = table_text
+
+            #
+            # Delivery Rationale
+            #
+            elif (
+                "delivery rationale"
+                in lower_text
+            ):
+
+                result[
+                    "delivery_rationale"
+                ] = table_text
+
+            #
+            # Amount Of Training
+            #
+            elif (
+                "amount of training"
+                in lower_text
+                and
+                "estimated number of hours"
+                in lower_text
+            ):
+
+                result[
+                    "amount_of_training"
+                ] = table_text
+
+            #
+            # Learning Resources
+            #
+            elif (
+                "learning resources"
+                in lower_text
+            ):
+
+                result[
+                    "learning_resources"
+                ] = table_text
+
+            #
+            # Facilities Equipment
+            #
+            elif (
+                "facilities and equipment"
+                in lower_text
+            ):
+
+                result[
+                    "facilities_equipment"
+                ] = table_text
+
+            #
+            # Learner Support
+            #
+            elif (
+                "accessibility and learning support"
+                in lower_text
+                or
+                "learner support"
+                in lower_text
+            ):
+
+                result[
+                    "learner_support"
+                ] = table_text
+
+            #
+            # Pathways
+            #
+            elif (
+                "pathways"
+                in lower_text
+            ):
+
+                result[
+                    "pathways"
+                ] = table_text
+
+            #
+            # Continuous Improvement
+            #
+            elif (
+                "continuous improvement"
+                in lower_text
+            ):
+
+                result[
+                    "continuous_improvement"
+                ] = table_text
+
+            #
+            # Review Date
+            #
+            if (
+                "review date"
+                in lower_text
+            ):
+
+                match = re.search(
+                    r"review date[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
+                    lower_text
+                )
+
+                if match:
+
+                    result[
+                        "review_date"
+                    ] = match.group(1)
+
+            #
+            # Current As At Date
+            #
+            if (
+                "current as at"
+                in lower_text
+            ):
+
+                match = re.search(
+                    r"current as at[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
+                    lower_text
+                )
+
+                if match:
+
+                    result[
+                        "current_as_at_date"
+                    ] = match.group(1)
+
+        return result
+
 
     # =====================================================
     # DELIVERY SCHEDULE
@@ -936,6 +1336,7 @@ class TASDoc:
         
         self.qualification = self.get_qualification()
         self.delivery = self.get_delivery()
+        self.delivery_content = self.get_delivery_content()
         self.units = self.get_units()        
         self.trainers = self.get_trainers()
         self.assessment_matrices = self.get_assessment_matrices()
@@ -950,6 +1351,7 @@ class TASDoc:
             "template": self.template,
             "qualification": self.qualification,
             "delivery": self.delivery,
+            "delivery_content": self.delivery_content,
             "units": self.units,
             "clusters": list(self.clusters.values()),
             "qualification_clusters": list(
