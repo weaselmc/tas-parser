@@ -338,14 +338,14 @@ class TASDoc:
             "title": None,
 
             "qualification_state_code": None,
-            "qualification_classification": self.get_qualification_classification(self),
+            "qualification_classification": self.get_qualification_classification(),
 
             "campus": None,
             "campus_code": None,
 
             "delivery_type": None,
 
-            "enrolment_type": self.get_enrolment_type(self),
+            "enrolment_type": self.get_enrolment_type(),
             "enrolment_code": None,
 
             "duration": None,
