@@ -1,23 +1,368 @@
+from importlib.resources import path
+from unittest import result
+
 from docx import Document
 from io import BytesIO
 from docx.oxml.ns import qn
 import re
 import xml
 import html
+from lxml import etree
+
+
+class WordHtmlConverter:
+
+    NS = {
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+        "w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+    }
+
+    def word_xml_to_html(self, xml):
+
+        if xml is None:
+            return ""
+
+        #
+        # Handle python-docx objects
+        #
+        if hasattr(xml, "xml"):
+            xml = xml.xml
+
+        if isinstance(xml, str):
+            root = etree.fromstring(
+                xml.encode("utf-8")
+            )
+        else:
+            root = xml
+
+        return self._process_element(root)
+
+    def _process_element(self, element):
+
+        tag = etree.QName(element).localname
+
+        if tag == "tbl":
+            return self._table_to_html(element)
+
+        if tag == "tc":
+            return self._cell_to_html(element)
+
+        if tag == "p":
+            return self._paragraph_to_html(element)
+
+        parts = []
+
+        for child in element:
+            parts.append(
+                self._process_element(child)
+            )
+
+        return "".join(parts)
+
+    def _table_to_html(self, table):
+
+        rows_html = []
+
+        rows_html.append(
+            '<table border="1">'
+        )
+
+        rows = table.xpath(
+            "./w:tr",
+            namespaces=self.NS
+        )
+
+        for row in rows:
+
+            rows_html.append("<tr>")
+
+            cells = row.xpath(
+                "./w:tc",
+                namespaces=self.NS
+            )
+
+            for cell in cells:
+
+                rows_html.append(
+                    (
+                        "<td>"
+                        f"{self._cell_to_html(cell)}"
+                        "</td>"
+                    )
+                )
+
+            rows_html.append("</tr>")
+
+        rows_html.append("</table>")
+
+        return "\n".join(rows_html)
+
+    def _cell_to_html(self, cell):
+
+        parts = []
+
+        in_list = False
+
+        paragraphs = cell.xpath(
+            "./w:p",
+            namespaces=self.NS
+        )
+
+        for paragraph in paragraphs:
+
+            is_list = bool(
+                paragraph.xpath(
+                    "./w:pPr/w:numPr",
+                    namespaces=self.NS
+                )
+            )
+
+            html = self._paragraph_to_html(
+                paragraph
+            )
+
+            if not html:
+                continue
+
+            if is_list:
+
+                if not in_list:
+                    parts.append("<ul>")
+                    in_list = True
+
+                parts.append(html)
+
+            else:
+
+                if in_list:
+                    parts.append("</ul>")
+                    in_list = False
+
+                parts.append(html)
+
+        if in_list:
+            parts.append("</ul>")
+
+        return "\n".join(parts)
+
+    def _paragraph_to_html(self, paragraph):
+
+        is_list = bool(
+            paragraph.xpath(
+                "./w:pPr/w:numPr",
+                namespaces=self.NS
+            )
+        )
+
+        runs = paragraph.xpath(
+            "./w:r",
+            namespaces=self.NS
+        )
+
+        #
+        # Build formatting groups
+        #
+        groups = []
+
+        for run in runs:
+
+            text = "".join(
+                run.xpath(
+                    ".//w:t/text()",
+                    namespaces=self.NS
+                )
+            )
+
+            if not text:
+                continue
+
+            fmt = (
+                bool(run.xpath(
+                    "./w:rPr/w:b",
+                    namespaces=self.NS
+                )),
+                bool(run.xpath(
+                    "./w:rPr/w:i",
+                    namespaces=self.NS
+                )),
+                bool(run.xpath(
+                    "./w:rPr/w:u",
+                    namespaces=self.NS
+                ))
+            )
+
+            #
+            # Merge adjacent runs with same formatting
+            #
+            if groups and groups[-1]["fmt"] == fmt:
+
+                groups[-1]["text"] += text
+
+            else:
+
+                groups.append({
+                    "fmt": fmt,
+                    "text": text
+                })
+
+        if not groups:
+            return ""
+
+        #
+        # Is entire paragraph bold?
+        #
+        all_bold = all(
+            g["fmt"][0]
+            for g in groups
+            if g["text"].strip()
+        )
+
+        #
+        # Heading detection
+        #
+        plain_text = "".join(
+            g["text"]
+            for g in groups
+        ).strip()
+
+        if (
+            all_bold
+            and plain_text
+        ):
+            return f"<h4>{html.escape(plain_text)}</h4>"
+
+        #
+        # Normal paragraph
+        #
+        parts = []
+
+        for group in groups:
+
+            text = html.escape(
+                group["text"]
+            )
+
+            bold, italic, underline = (
+                group["fmt"]
+            )
+
+            if underline:
+                text = f"<u>{text}</u>"
+
+            if italic:
+                text = f"<em>{text}</em>"
+
+            if bold:
+                text = f"<strong>{text}</strong>"
+
+            parts.append(text)
+
+        content = "".join(parts).strip()
+
+        if not content:
+            return ""
+
+        if is_list:
+            return f"<li>{content}</li>"
+
+        return f"<p>{content}</p>"
+
+
+    def _run_to_html(self, run):
+
+        #
+        # Checkbox
+        #
+        checked = run.xpath(
+            ".//w14:checked[@w14:val='1']",
+            namespaces=self.NS
+        )
+
+        if checked:
+            return "☑"
+
+        text = "".join(
+            run.xpath(
+                ".//w:t/text()",
+                namespaces=self.NS
+            )
+        )
+
+        if not text:
+
+            br = run.xpath(
+                ".//w:br",
+                namespaces=self.NS
+            )
+
+            if br:
+                return "<br>"
+
+            return ""
+
+        text = html.escape(text)
+
+        #
+        # Formatting
+        #
+        if run.xpath(
+            "./w:rPr/w:b",
+            namespaces=self.NS
+        ):
+            text = (
+                f"<strong>{text}</strong>"
+            )
+
+        if run.xpath(
+            "./w:rPr/w:i",
+            namespaces=self.NS
+        ):
+            text = (
+                f"<em>{text}</em>"
+            )
+
+        if run.xpath(
+            "./w:rPr/w:u",
+            namespaces=self.NS
+        ):
+            text = (
+                f"<u>{text}</u>"
+            )
+
+        return text
+
+    def _hyperlink_to_html(self, hyperlink):
+
+        text = ""
+
+        for run in hyperlink.xpath(
+            ".//w:r",
+            namespaces=self.NS
+        ):
+            text += self._run_to_html(
+                run
+            )
+
+        #
+        # Relationship lookup could
+        # be added later.
+        #
+        return text
 
 class TASDoc:
 
     def __init__(self, source):
 
-        self.source = source
-        
+        self.source = source        
         if isinstance(source, bytes):
             self.source = BytesIO(source)        
         self.doc = Document(self.source)
 
         self.tables = self._load_tables()
         self.template = self._detect_template()
-        
+
+        self.converter = WordHtmlConverter()
+
         # Parsed data
         self.qualification = None
         self.delivery = None
@@ -228,39 +573,37 @@ class TASDoc:
     # =====================================================
     # DELIVERY DETAILS
     # =====================================================
-    def get_qualification_classification(self):
+    def get_qualification_classification(self, table):
 
-        for table in self.tables:
+        rows = table["rows"]
 
-            rows = table["rows"]
+        if (
+            rows
+            and "qualification classification"
+            in " ".join(rows[0]).lower()
+        ):
 
-            if (
-                rows
-                and "qualification classification"
-                in " ".join(rows[0]).lower()
-            ):
+            docx_table = table["table"]
 
-                docx_table = table["table"]
+            mapping = {
+                1: "A",
+                2: "B",
+                3: "C"
+            }
 
-                mapping = {
-                    1: "A",
-                    2: "B",
-                    3: "C"
-                }
+            for col, classification in mapping.items():
 
-                for col, classification in mapping.items():
+                cell_xml = (
+                    docx_table.rows[1]
+                    .cells[col]
+                    ._tc.xml
+                )
 
-                    cell_xml = (
-                        docx_table.rows[0]
-                        .cells[col]
-                        ._tc.xml
-                    )
-
-                    if (
-                        'w14:checked w14:val="1"'
-                        in cell_xml
-                    ):
-                        return classification
+                if (
+                    'w14:checked w14:val="1"'
+                    in cell_xml
+                ):
+                    return classification
 
         return None
     
@@ -336,28 +679,17 @@ class TASDoc:
 
         result = {
             "title": None,
-
             "qualification_state_code": None,
-            "qualification_classification": self.get_qualification_classification(),
-
             "campus": None,
             "campus_code": None,
-
-            "delivery_type": None,
-
             "enrolment_type": self.get_enrolment_type(),
             "enrolment_code": None,
-
             "duration": None,
-
             "start_date": None,
             "finish_date": None,
-
             "semester": None,
             "year": None,
-
             "stages": None,
-
             "template_version": None,
             "version_number": None,
             "approval_status": None
@@ -567,32 +899,35 @@ class TASDoc:
     def get_delivery_content(self):
 
         result = {
+
+            # HTML (existing SharePoint fields)
             "program_overview": None,
-
             "industry_engagement": None,
-
             "learner_cohort": None,
-
             "delivery_rationale": None,
-
             "amount_of_training": None,
-
             "learning_resources": None,
-
             "facilities_equipment": None,
-
             "learner_support": None,
-
             "pathways": None,
-
             "continuous_improvement": None,
 
+            # Plain text (new fields)
+            "program_overview_text": None,
+            "industry_engagement_text": None,
+            "learner_cohort_text": None,
+            "delivery_rationale_text": None,
+            "amount_of_training_text": None,
+            "learning_resources_text": None,
+            "facilities_equipment_text": None,
+            "learner_support_text": None,
+            "pathways_text": None,
+            "continuous_improvement_text": None,
+
+            # Existing metadata
             "qualification_classification": None,
-
             "industry_meeting_date": None,
-
             "review_date": None,
-
             "current_as_at_date": None
         }
 
@@ -603,6 +938,8 @@ class TASDoc:
             if not rows:
                 continue
 
+            table_number = table["table_number"]
+
             table_text = "\n".join(
                 " ".join(row)
                 for row in rows
@@ -610,22 +947,51 @@ class TASDoc:
 
             lower_text = table_text.lower()
 
-            
-            #
-            # Program Overview / Industry
-            #
-            if (
-                "program overview"
-                in lower_text
-            ):
+            table_html = self.converter.word_xml_to_html(
+                table["table"]._tbl
+            )
 
-                result[
-                    "program_overview"
-                ] = table_text
+            if table_number == 2:
+                result["qualification_classification"] = (self.get_qualification_classification(table))
+            #
+            # Table 4
+            # Program Overview / Industry Engagement
+            #
+            elif table_number == 4:
 
-                #
-                # Try to capture meeting date
-                #
+                program_parts = re.split(
+                    r"industry engagement and feedback:",
+                    table_text,
+                    flags=re.IGNORECASE
+                )
+
+                html_parts = re.split(
+                    r"industry engagement and feedback:",
+                    table_html,
+                    flags=re.IGNORECASE
+                )
+
+                if len(program_parts) == 2:
+
+                    result["program_overview_text"] = (
+                        program_parts[0].strip()
+                    )
+
+                    result["industry_engagement_text"] = (
+                        program_parts[1].strip()
+                    )
+
+                if len(html_parts) == 2:
+
+                    result["program_overview"] = (
+                        html_parts[0].strip()
+                    )
+
+                    result["industry_engagement"] = (
+                        html_parts[1].strip()
+                    )
+                
+
                 match = re.search(
                     r"industry advisory committee met on (\d{1,2}/\d{1,2}/\d{4})",
                     lower_text
@@ -638,117 +1004,125 @@ class TASDoc:
                     ] = match.group(1)
 
             #
+            # Table 5
             # Learner Cohort
             #
-            elif (
-                "learners are expected"
-                in lower_text
-                or
-                "learner cohort"
-                in lower_text
-            ):
+            elif table_number == 5:
 
-                result[
-                    "learner_cohort"
-                ] = table_text
+                result["learner_cohort_text"] = table_text
+                result["learner_cohort"] = table_html
 
             #
+            # Table 10
             # Delivery Rationale
             #
-            elif (
-                "delivery rationale"
-                in lower_text
-            ):
+            elif table_number == 10:
+
+                rationale_parts = re.split(
+                    r"amount of training:",
+                    table_text,
+                    flags=re.IGNORECASE
+                )
 
                 result[
                     "delivery_rationale"
-                ] = table_text
+                ] = rationale_parts[0].strip()
 
             #
+            # Table 11
             # Amount Of Training
             #
-            elif (
-                "amount of training"
-                in lower_text
-                and
-                "estimated number of hours"
-                in lower_text
-            ):
+            elif table_number == 11:
 
                 result[
                     "amount_of_training"
                 ] = table_text
 
             #
+            # Table 24
             # Learning Resources
             #
-            elif (
-                "learning resources"
-                in lower_text
-            ):
+            elif table_number == 24:
 
                 result[
                     "learning_resources"
                 ] = table_text
 
             #
-            # Facilities Equipment
+            # Table 25
+            # Facilities & Equipment
             #
-            elif (
-                "facilities and equipment"
-                in lower_text
-            ):
+            elif table_number == 25:
 
                 result[
                     "facilities_equipment"
                 ] = table_text
 
             #
-            # Learner Support
+            # Table 26
+            # Learner Support Needs
             #
-            elif (
-                "accessibility and learning support"
-                in lower_text
-                or
-                "learner support"
-                in lower_text
-            ):
+            elif table_number == 26:
 
                 result[
                     "learner_support"
-                ] = table_text
+                ] = table_text.strip()
 
             #
+            # Table 27
+            # Student Support Services
+            #
+            elif table_number == 27:
+
+                support_text = table_text
+
+                support_text = support_text.replace(
+                    (
+                        "Amend this list as appropriate "
+                        "to the learner cohort remove "
+                        "this sentence and amend the "
+                        "font colour to black."
+                    ),
+                    ""
+                ).strip()
+
+                if result["learner_support"]:
+
+                    result["learner_support"] += (
+                        "\n\n" + support_text
+                    )
+
+                else:
+
+                    result["learner_support"] = (
+                        support_text
+                    )
+
+            #
+            # Table 28
             # Pathways
             #
-            elif (
-                "pathways"
-                in lower_text
-            ):
+            elif table_number == 28:
 
                 result[
                     "pathways"
                 ] = table_text
 
             #
+            # Table 29
             # Continuous Improvement
             #
-            elif (
-                "continuous improvement"
-                in lower_text
-            ):
+            elif table_number == 29:
 
                 result[
                     "continuous_improvement"
                 ] = table_text
 
             #
-            # Review Date
+            # Table 30
+            # Review Information
             #
-            if (
-                "review date"
-                in lower_text
-            ):
+            elif table_number == 30:
 
                 match = re.search(
                     r"review date[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
@@ -760,14 +1134,6 @@ class TASDoc:
                     result[
                         "review_date"
                     ] = match.group(1)
-
-            #
-            # Current As At Date
-            #
-            if (
-                "current as at"
-                in lower_text
-            ):
 
                 match = re.search(
                     r"current as at[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
