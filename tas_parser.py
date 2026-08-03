@@ -443,7 +443,6 @@ class TASDoc:
     # =====================================================
     # QUALIFICATION
     # =====================================================
-
     def get_qualification(self):
 
         for table in self.tables:
@@ -510,7 +509,7 @@ class TASDoc:
 
                         qualification_title = (
                             qualification_parts[1]
-                        )
+                        )                        
 
                     else:
 
@@ -518,6 +517,12 @@ class TASDoc:
                         qualification_title = (
                             qualification_value
                         )
+
+                    qualification_title = (
+                        qualification_title
+                        .lstrip("-")
+                        .strip()
+                    )
 
                     return {
 
@@ -573,15 +578,21 @@ class TASDoc:
     # =====================================================
     # DELIVERY DETAILS
     # =====================================================
-    def get_qualification_classification(self, table):
 
-        rows = table["rows"]
+    def get_qualification_classification(self):
 
-        if (
-            rows
-            and "qualification classification"
-            in " ".join(rows[0]).lower()
-        ):
+        for table in self.tables:
+
+            table_text = "\n".join(
+                " ".join(row)
+                for row in table["rows"]
+            ).lower()
+
+            if (
+                "qualification classification"
+                not in table_text
+            ):
+                continue
 
             docx_table = table["table"]
 
@@ -591,23 +602,29 @@ class TASDoc:
                 3: "C"
             }
 
-            for col, classification in mapping.items():
+            for row in docx_table.rows:
 
-                cell_xml = (
-                    docx_table.rows[1]
-                    .cells[col]
-                    ._tc.xml
-                )
+                for col, classification in mapping.items():
 
-                if (
-                    'w14:checked w14:val="1"'
-                    in cell_xml
-                ):
-                    return classification
+                    if col >= len(row.cells):
+                        continue
+
+                    if (
+                        'w14:checked w14:val="1"'
+                        in row.cells[col]._tc.xml
+                    ):
+                        return classification
 
         return None
-    
+
     def get_enrolment_type(self):
+
+        if self.template == "new":
+            return self._get_enrolment_type_new()
+
+        return self._get_enrolment_type_old()
+    
+    def _get_enrolment_type_new(self):
 
         for table in self.tables:
 
@@ -674,6 +691,81 @@ class TASDoc:
                     return "Third Party"
 
         return None
+
+    def _get_enrolment_type_old(self):
+
+        for table in self.tables:
+
+            text = "\n".join(
+                " ".join(row)
+                for row in table["rows"]
+            ).lower()
+
+            if (
+                "full time" not in text
+                or "part time" not in text
+            ):
+                continue
+
+            xml = table["table"]._tbl.xml
+
+            checked_values = re.findall(
+                r'w14:checked w14:val="([01])"',
+                xml
+            )
+
+            if len(checked_values) < 4:
+                continue
+
+            mapping = [
+                "Full Time",
+                "Part Time",
+                "Other",
+                "Third Party"
+            ]
+
+            for i, value in enumerate(
+                checked_values[:4]
+            ):
+
+                if value == "1":
+
+                    if mapping[i] == "Other":
+
+                        return self.get_other_enrolment_value(
+                            table["table"].cell(0, 0)
+                        )
+
+                    return mapping[i]
+
+        return None
+
+    def get_other_enrolment_value(self, cell):
+
+        xml = cell._tc.xml
+
+        #
+        # Find dropdown content controls
+        #
+        dropdowns = re.findall(
+            r'<w:sdt>.*?<w:dropDownList>.*?</w:dropDownList>.*?<w:t>(.*?)</w:t>',
+            xml,
+            flags=re.DOTALL
+        )
+
+        for value in dropdowns:
+
+            value = value.strip()
+
+            if not value:
+                continue
+
+            if value.lower() == "click here to select other type":
+                continue
+
+            return value
+
+        return "Other"
 
     def get_delivery(self):
 
@@ -896,11 +988,70 @@ class TASDoc:
 
         return result
     
+    def _get_table_by_number(self, table_number):
+
+        for table in self.tables:
+
+            if (
+                table["table_number"]
+                == table_number
+            ):
+                return table
+
+        return None
+
+    def _get_delivery_content_table_map(self):
+
+        return {
+            "old": {
+
+                "program_overview": 5,
+                "learner_cohort": 6,
+
+                "enrolment": 7,
+                "duration": 8,
+                "campus": 9,
+
+                "delivery_rationale": 11,
+                "amount_of_training": 12,
+
+                "learning_resources": 23,
+                "facilities_equipment": 24,
+
+                "learner_support": 26,
+                "pathways": 27,
+            },
+
+            "new": {
+
+                "program_overview": 4,
+                "learner_cohort": 5,
+
+                "enrolment": 6,
+                "duration": 7,
+                "campus": 8,
+
+                "delivery_rationale": 10,
+                "amount_of_training": 11,
+
+                "learning_resources": 24,
+                "facilities_equipment": 25,
+
+                "learner_support": 26,
+                "pathways": 28,
+
+                "continuous_improvement": 29,
+                "review_information": 30,
+            }
+        }
+
     def get_delivery_content(self):
 
         result = {
 
-            # HTML (existing SharePoint fields)
+            #
+            # HTML
+            #
             "program_overview": None,
             "industry_engagement": None,
             "learner_cohort": None,
@@ -912,7 +1063,9 @@ class TASDoc:
             "pathways": None,
             "continuous_improvement": None,
 
-            # Plain text (new fields)
+            #
+            # Plain text
+            #
             "program_overview_text": None,
             "industry_engagement_text": None,
             "learner_cohort_text": None,
@@ -924,77 +1077,114 @@ class TASDoc:
             "pathways_text": None,
             "continuous_improvement_text": None,
 
-            # Existing metadata
-            "qualification_classification": None,
+            #
+            # Metadata
+            #
+            "qualification_classification":
+                self.get_qualification_classification(),
+
             "industry_meeting_date": None,
             "review_date": None,
             "current_as_at_date": None
         }
 
-        for table in self.tables:
+        mapping = self._get_delivery_content_table_map()[
+            self.template
+        ]
 
-            rows = table["rows"]
+        #
+        # Generic extraction
+        #
+        for section, table_number in mapping.items():
 
-            if not rows:
-                continue
-
-            table_number = table["table_number"]
-
-            table_text = "\n".join(
-                " ".join(row)
-                for row in rows
+            table = self._get_table_by_number(
+                table_number
             )
 
-            lower_text = table_text.lower()
+            if table is None:
+                continue
 
-            table_html = self.converter.word_xml_to_html(
+            text = "\n".join(
+                " ".join(row)
+                for row in table["rows"]
+            )
+
+            html = self.converter.word_xml_to_html(
                 table["table"]._tbl
             )
 
-            if table_number == 2:
-                result["qualification_classification"] = (self.get_qualification_classification(table))
             #
-            # Table 4
-            # Program Overview / Industry Engagement
+            # Store HTML
             #
-            elif table_number == 4:
+            if section in result:
+                result[section] = html
 
-                program_parts = re.split(
+            #
+            # Store text
+            #
+            text_key = f"{section}_text"
+
+            if text_key in result:
+                result[text_key] = text
+
+        #
+        # NEW TEMPLATE SPECIAL HANDLING
+        #
+        if self.template == "new":
+
+            #
+            # Split Program Overview /
+            # Industry Engagement
+            #
+            table = self._get_table_by_number(4)
+
+            if table:
+
+                text = "\n".join(
+                    " ".join(row)
+                    for row in table["rows"]
+                )
+
+                html = self.converter.word_xml_to_html(
+                    table["table"]._tbl
+                )
+
+                text_parts = re.split(
                     r"industry engagement and feedback:",
-                    table_text,
+                    text,
                     flags=re.IGNORECASE
                 )
 
                 html_parts = re.split(
                     r"industry engagement and feedback:",
-                    table_html,
+                    html,
                     flags=re.IGNORECASE
                 )
 
-                if len(program_parts) == 2:
+                if len(text_parts) == 2:
 
-                    result["program_overview_text"] = (
-                        program_parts[0].strip()
-                    )
+                    result[
+                        "program_overview_text"
+                    ] = text_parts[0].strip()
 
-                    result["industry_engagement_text"] = (
-                        program_parts[1].strip()
-                    )
+                    result[
+                        "industry_engagement_text"
+                    ] = text_parts[1].strip()
 
                 if len(html_parts) == 2:
 
-                    result["program_overview"] = (
-                        html_parts[0].strip()
-                    )
+                    result[
+                        "program_overview"
+                    ] = html_parts[0].strip()
 
-                    result["industry_engagement"] = (
-                        html_parts[1].strip()
-                    )
-                
+                    result[
+                        "industry_engagement"
+                    ] = html_parts[1].strip()
 
                 match = re.search(
                     r"industry advisory committee met on (\d{1,2}/\d{1,2}/\d{4})",
-                    lower_text
+                    text,
+                    flags=re.IGNORECASE
                 )
 
                 if match:
@@ -1004,79 +1194,27 @@ class TASDoc:
                     ] = match.group(1)
 
             #
-            # Table 5
-            # Learner Cohort
+            # Merge learner support
+            # (Tables 26 + 27)
             #
-            elif table_number == 5:
+            learner_support = result.get(
+                "learner_support_text"
+            )
 
-                result["learner_cohort_text"] = table_text
-                result["learner_cohort"] = table_html
+            extra_table = self._get_table_by_number(27)
 
-            #
-            # Table 10
-            # Delivery Rationale
-            #
-            elif table_number == 10:
+            if extra_table:
 
-                rationale_parts = re.split(
-                    r"amount of training:",
-                    table_text,
-                    flags=re.IGNORECASE
+                extra_text = "\n".join(
+                    " ".join(row)
+                    for row in extra_table["rows"]
                 )
 
-                result[
-                    "delivery_rationale"
-                ] = rationale_parts[0].strip()
+                extra_html = self.converter.word_xml_to_html(
+                    extra_table["table"]._tbl
+                )
 
-            #
-            # Table 11
-            # Amount Of Training
-            #
-            elif table_number == 11:
-
-                result[
-                    "amount_of_training"
-                ] = table_text
-
-            #
-            # Table 24
-            # Learning Resources
-            #
-            elif table_number == 24:
-
-                result[
-                    "learning_resources"
-                ] = table_text
-
-            #
-            # Table 25
-            # Facilities & Equipment
-            #
-            elif table_number == 25:
-
-                result[
-                    "facilities_equipment"
-                ] = table_text
-
-            #
-            # Table 26
-            # Learner Support Needs
-            #
-            elif table_number == 26:
-
-                result[
-                    "learner_support"
-                ] = table_text.strip()
-
-            #
-            # Table 27
-            # Student Support Services
-            #
-            elif table_number == 27:
-
-                support_text = table_text
-
-                support_text = support_text.replace(
+                extra_text = extra_text.replace(
                     (
                         "Amend this list as appropriate "
                         "to the learner cohort remove "
@@ -1086,47 +1224,43 @@ class TASDoc:
                     ""
                 ).strip()
 
+                if learner_support:
+
+                    result[
+                        "learner_support_text"
+                    ] = (
+                        learner_support
+                        + "\n\n"
+                        + extra_text
+                    )
+
                 if result["learner_support"]:
 
-                    result["learner_support"] += (
-                        "\n\n" + support_text
-                    )
-
-                else:
-
-                    result["learner_support"] = (
-                        support_text
+                    result[
+                        "learner_support"
+                    ] += (
+                        "<br><br>"
+                        + extra_html
                     )
 
             #
-            # Table 28
-            # Pathways
+            # Review date extraction
             #
-            elif table_number == 28:
+            review_table = self._get_table_by_number(
+                30
+            )
 
-                result[
-                    "pathways"
-                ] = table_text
+            if review_table:
 
-            #
-            # Table 29
-            # Continuous Improvement
-            #
-            elif table_number == 29:
-
-                result[
-                    "continuous_improvement"
-                ] = table_text
-
-            #
-            # Table 30
-            # Review Information
-            #
-            elif table_number == 30:
+                review_text = "\n".join(
+                    " ".join(row)
+                    for row in review_table["rows"]
+                )
 
                 match = re.search(
                     r"review date[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
-                    lower_text
+                    review_text,
+                    flags=re.IGNORECASE
                 )
 
                 if match:
@@ -1137,7 +1271,8 @@ class TASDoc:
 
                 match = re.search(
                     r"current as at[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
-                    lower_text
+                    review_text,
+                    flags=re.IGNORECASE
                 )
 
                 if match:
@@ -1147,7 +1282,6 @@ class TASDoc:
                     ] = match.group(1)
 
         return result
-
 
     # =====================================================
     # DELIVERY SCHEDULE
