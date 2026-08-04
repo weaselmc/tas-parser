@@ -1475,7 +1475,7 @@ class TASDoc:
                     "delivery_mode": delivery_mode,
                     "core_elective": core_elective,
                     "elective_group": elective_group
-                })
+                })                
 
         return units
 
@@ -1990,7 +1990,21 @@ class TASDoc:
         self.qualification = self.get_qualification()
         self.delivery = self.get_delivery()
         self.delivery_content = self.get_delivery_content()
-        self.units = self.get_units()        
+        self.units = self.get_units()
+        if (
+            self.delivery.get("stages") is None
+            and self.units
+        ):
+
+            stages = {
+                unit["stage"]
+                for unit in self.units
+                if unit.get("stage")
+            }
+
+            if stages:
+                self.delivery["stages"] = max(stages)
+                
         self.trainers = self.get_trainers()
         self.assessment_matrices = self.get_assessment_matrices()
         self.assessment_calendars = self.get_assessment_calendars()
