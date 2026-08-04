@@ -1,3 +1,4 @@
+from datetime import datetime
 from importlib.resources import path
 from unittest import result
 
@@ -1133,56 +1134,95 @@ class TASDoc:
         if self.template == "new":
 
             #
-            # Split Program Overview /
-            # Industry Engagement
+            # Program Overview / Industry Engagement
             #
-            table = self._get_table_by_number(4)
+            overview_table = self._get_table_by_number(
+                mapping["program_overview"]
+            )
 
-            if table:
+            if overview_table:
 
                 text = "\n".join(
                     " ".join(row)
-                    for row in table["rows"]
+                    for row in overview_table["rows"]
                 )
 
                 html = self.converter.word_xml_to_html(
-                    table["table"]._tbl
+                    overview_table["table"]._tbl
                 )
 
-                text_parts = re.split(
+                #
+                # Newer templates explicitly split
+                #
+                if re.search(
                     r"industry engagement and feedback:",
                     text,
                     flags=re.IGNORECASE
-                )
+                ):
 
-                html_parts = re.split(
-                    r"industry engagement and feedback:",
-                    html,
-                    flags=re.IGNORECASE
-                )
+                    text_parts = re.split(
+                        r"industry engagement and feedback:",
+                        text,
+                        flags=re.IGNORECASE
+                    )
 
-                if len(text_parts) == 2:
+                    html_parts = re.split(
+                        r"industry engagement and feedback:",
+                        html,
+                        flags=re.IGNORECASE
+                    )
 
                     result[
                         "program_overview_text"
                     ] = text_parts[0].strip()
 
                     result[
-                        "industry_engagement_text"
-                    ] = text_parts[1].strip()
-
-                if len(html_parts) == 2:
-
-                    result[
                         "program_overview"
                     ] = html_parts[0].strip()
 
+                    if len(text_parts) > 1:
+
+                        result[
+                            "industry_engagement_text"
+                        ] = text_parts[1].strip()
+
+                    if len(html_parts) > 1:
+
+                        result[
+                            "industry_engagement"
+                        ] = html_parts[1].strip()
+
+                #
+                # Some TAS documents don't contain the
+                # Industry Engagement heading at all.
+                #
+                else:
+
+                    result[
+                        "program_overview_text"
+                    ] = text
+
+                    result[
+                        "program_overview"
+                    ] = html
+
+                    #
+                    # Treat the whole section as
+                    # industry engagement too.
+                    #
+                    result[
+                        "industry_engagement_text"
+                    ] = text
+
                     result[
                         "industry_engagement"
-                    ] = html_parts[1].strip()
+                    ] = html
 
+                #
+                # Industry meeting date
+                #
                 match = re.search(
-                    r"industry advisory committee met on (\d{1,2}/\d{1,2}/\d{4})",
+                    r"industry advisory committee met on\s+(\d{1,2}/\d{1,2}/\d{4})",
                     text,
                     flags=re.IGNORECASE
                 )
@@ -1193,93 +1233,111 @@ class TASDoc:
                         "industry_meeting_date"
                     ] = match.group(1)
 
-            #
-            # Merge learner support
-            # (Tables 26 + 27)
-            #
-            learner_support = result.get(
-                "learner_support_text"
-            )
-
-            extra_table = self._get_table_by_number(27)
-
-            if extra_table:
-
-                extra_text = "\n".join(
-                    " ".join(row)
-                    for row in extra_table["rows"]
+                #
+                # Merge learner support
+                #
+                learner_support = result.get(
+                    "learner_support_text"
                 )
 
-                extra_html = self.converter.word_xml_to_html(
-                    extra_table["table"]._tbl
-                )
+                extra_table = self._get_table_by_number(27)
 
-                extra_text = extra_text.replace(
-                    (
-                        "Amend this list as appropriate "
-                        "to the learner cohort remove "
-                        "this sentence and amend the "
-                        "font colour to black."
-                    ),
-                    ""
-                ).strip()
+                if extra_table:
 
-                if learner_support:
-
-                    result[
-                        "learner_support_text"
-                    ] = (
-                        learner_support
-                        + "\n\n"
-                        + extra_text
+                    extra_text = "\n".join(
+                        " ".join(row)
+                        for row in extra_table["rows"]
                     )
 
-                if result["learner_support"]:
-
-                    result[
-                        "learner_support"
-                    ] += (
-                        "<br><br>"
-                        + extra_html
+                    extra_html = self.converter.word_xml_to_html(
+                        extra_table["table"]._tbl
                     )
 
-            #
-            # Review date extraction
-            #
-            review_table = self._get_table_by_number(
-                30
-            )
+                    extra_text = extra_text.replace(
+                        (
+                            "Amend this list as appropriate "
+                            "to the learner cohort remove "
+                            "this sentence and amend the "
+                            "font colour to black."
+                        ),
+                        ""
+                    ).strip()
 
-            if review_table:
+                    if learner_support:
 
-                review_text = "\n".join(
-                    " ".join(row)
-                    for row in review_table["rows"]
+                        result[
+                            "learner_support_text"
+                        ] = (
+                            learner_support
+                            + "\n\n"
+                            + extra_text
+                        )
+
+                    if result["learner_support"]:
+
+                        result[
+                            "learner_support"
+                        ] += (
+                            "<br><br>"
+                            + extra_html
+                        )
+
+                #
+                # Review information
+                #
+                review_table = self._get_table_by_number(
+                    30
                 )
 
-                match = re.search(
-                    r"review date[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
-                    review_text,
-                    flags=re.IGNORECASE
-                )
+                if review_table:
+                    
+                    from datetime import datetime
 
-                if match:
+                    for row in review_table["rows"]:
 
-                    result[
-                        "review_date"
-                    ] = match.group(1)
+                        row_text = " ".join(
+                            str(cell)
+                            for cell in row
+                        )
 
-                match = re.search(
-                    r"current as at[:\s]+(\d{1,2}/\d{1,2}/\d{4})",
-                    review_text,
-                    flags=re.IGNORECASE
-                )
+                        if (
+                            "reviewed"
+                            in row_text.lower()
+                        ):
 
-                if match:
+                            match = re.search(
+                                r"(\d{1,2}/\d{1,2}/\d{4})",
+                                row_text
+                            )
 
-                    result[
-                        "current_as_at_date"
-                    ] = match.group(1)
+                            if match:
+
+                                result[
+                                    "review_date"
+                                ] = (   datetime.strptime(
+                                        match.group(1),
+                                        "%d/%m/%Y"
+                                        ).date()
+                                    )
+                        elif (
+                            "current as at"
+                            in row_text.lower()
+                        ):
+
+                            match = re.search(
+                                r"(\d{1,2}/\d{1,2}/\d{4})",
+                                row_text
+                            )
+
+                            if match:
+
+                                result[
+                                    "current_as_at_date"
+                                ] = (   datetime.strptime(
+                                        match.group(1),
+                                        "%d/%m/%Y"
+                                        ).date()
+                                    )
 
         return result
 
