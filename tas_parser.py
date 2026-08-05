@@ -369,10 +369,6 @@ class TASDoc:
         self.delivery = None
         self.delivery_content = None
         self.units = None
-        
-        self.trainers = None
-        self.assessment_matrices = None
-        self.assessment_calendars = None
 
         # Relationship data
         self.clusters = {}
@@ -1478,161 +1474,6 @@ class TASDoc:
                 })                
 
         return units
-
-    # =====================================================
-    # TRAINERS
-    # =====================================================
-
-    def get_trainers(self):
-
-        trainers = []
-
-        for table in self.tables:
-
-            rows = table["rows"]
-
-            if len(rows) < 2:
-                continue
-
-            header_text = " ".join(
-                " ".join(r)
-                for r in rows[:2]
-            ).lower()
-
-            #
-            # OLD TEMPLATE
-            #
-            if "trainer / assessor" in header_text:
-
-                for row in rows:
-
-                    if len(row) < 4:
-                        continue
-
-                    code = row[0].strip()
-
-                    if not re.fullmatch(
-                        r"[A-Z]{3,}\d{3,}",
-                        code
-                    ):
-                        continue
-
-                    trainers.append(
-                        {
-                            "national_code": row[0],
-                            "state_code": row[1],
-                            "unit_title": row[2],
-                            "trainer_assessor": row[3]
-                        }
-                    )
-
-            #
-            # NEW TEMPLATE
-            #
-            elif "trainer/assessors name" in header_text:
-
-                for row in rows[2:]:
-
-                    if len(row) < 3:
-                        continue
-
-                    code = row[0].strip()
-
-                    if not re.fullmatch(
-                        r"[A-Z]{3,}\d{3,}",
-                        code
-                    ):
-                        continue
-
-                    trainer = ""
-
-                    if len(row) >= 3:
-                        trainer = row[2]
-
-                    trainers.append(
-                        {
-                            "national_code": code,
-                            "unit_title": row[1],
-                            "trainer_assessor": trainer
-                        }
-                    )
-
-        return trainers
-
-    # =====================================================
-    # ASSESSMENT MATRIX
-    # =====================================================
-
-    def get_assessment_matrices(self):
-
-        matrices = []
-
-        for table in self.tables:
-
-            rows = table["rows"]
-
-            if len(rows) < 3:
-                continue
-
-            row1 = " ".join(rows[0]).lower()
-            row2 = " ".join(rows[1]).lower()
-
-            if (
-                "national code" in row1
-                and "unit of competency" in row1
-            ):
-
-                if (
-                    "a" in row2
-                    and "b" in row2
-                    and "c" in row2
-                    and "d" in row2
-                ):
-                    matrices.append(table)
-
-        return matrices
-
-    # =====================================================
-    # ASSESSMENT CALENDAR
-    # =====================================================
-
-    def get_assessment_calendars(self):
-
-        calendars = []
-
-        for table in self.tables:
-
-            rows = table["rows"]
-
-            if len(rows) < 2:
-                continue
-
-            row1 = " ".join(rows[0]).lower()
-            row2 = " ".join(rows[1]).lower()
-
-            #
-            # New template
-            #
-            if (
-                (
-                    "first semester" in row1
-                    or "second semester" in row1
-                )
-                and "national code" in row2
-            ):
-                calendars.append(table)
-                continue
-
-            #
-            # Old template
-            #
-            if (
-                "national code" in row1
-                and "wk1" in row1
-            ):
-                calendars.append(table)
-
-        return calendars
         
     def get_cell_borders(self, cell):
 
@@ -2003,11 +1844,8 @@ class TASDoc:
             }
 
             if stages:
-                self.delivery["stages"] = max(stages)
-                
-        self.trainers = self.get_trainers()
-        self.assessment_matrices = self.get_assessment_matrices()
-        self.assessment_calendars = self.get_assessment_calendars()
+                self.delivery["stages"] = max(stages)                
+        
         self.build_relationships()
         
         return self
@@ -2029,8 +1867,5 @@ class TASDoc:
             ),
             "qualification_units": list(
                 self.qualification_units.values()
-            ),
-            "trainers":
-                self.get_trainers()
-         
+            )         
         }
