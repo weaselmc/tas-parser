@@ -6,6 +6,7 @@ import base64
 
 try:
     import tas_parser
+    import lap_parser
     IMPORT_OK = True
 except Exception as ex:
     IMPORT_OK = False
@@ -13,6 +14,7 @@ except Exception as ex:
 
 import azure.functions as func
 from tas_parser import TASDoc
+from lap_parser import LAPDoc
 
 app = func.FunctionApp()
 @app.route(
@@ -58,3 +60,39 @@ def test(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"Import OK.")
     else:
         return func.HttpResponse(IMPORT_ERROR)
+
+@app.route(
+    route="parse-lap",
+    auth_level=func.AuthLevel.FUNCTION
+)
+def parse_lap(req: func.HttpRequest) -> func.HttpResponse:
+
+    try:
+
+        body = req.get_json()
+
+        file_name = body.get("fileName")
+
+        file_content = body.get("fileContent")
+
+        file_bytes = base64.b64decode(
+            file_content
+        )
+
+        result = LAPDoc(file_bytes).parse().to_lists()         
+
+        return func.HttpResponse(
+            json.dumps(
+                result,
+                default=str
+            ),
+            mimetype="application/json",
+            status_code=200
+        )
+
+    except Exception as ex:
+
+        return func.HttpResponse(
+            str(ex),
+            status_code=500
+        )
