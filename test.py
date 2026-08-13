@@ -11,11 +11,14 @@ for docx_file in sorted(folder.glob("*.docx")):
 
     print(f"\nProcessing {docx_file.name}")
 
-    result = (
-        LAPDoc(str(docx_file))
+    lap = LAPDoc(str(docx_file))
+    
+    result = (lap       
         .parse()
         .to_lists()
     )
+
+    lap.debug_tables()
 
     print(
         json.dumps(

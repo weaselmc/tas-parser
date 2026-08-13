@@ -77,6 +77,23 @@ class LAPDoc:
 
         return None
 
+    def debug_cluster(self):
+
+        for table in self.tables:
+
+            text = "\n".join(
+                " | ".join(row)
+                for row in table["rows"]
+            )
+
+            if "cluster" in text.lower():
+
+                print("\n" + "=" * 80)
+                print(f"TABLE {table['table_number']}")
+                print("=" * 80)
+
+                print(text)
+
     # =====================================================
     # QUALIFICATION
     # =====================================================
@@ -98,6 +115,17 @@ class LAPDoc:
             return match.group(1)
 
         return None
+    
+    def debug_tables(self):
+
+        for table in self.tables:
+
+            print("\n" + "=" * 80)
+            print(f"TABLE {table['table_number']}")
+            print("=" * 80)
+
+            for row in table["rows"]:
+                print(row)
 
     # =====================================================
     # CLUSTER
@@ -109,20 +137,20 @@ class LAPDoc:
 
             rows = table["rows"]
 
-            for i, row in enumerate(rows):
+            for row in rows:
 
-                row_text = " ".join(row).lower()
+                if len(row) < 2:
+                    continue
 
-                if "cluster name" in row_text:
+                if (
+                    row[0]
+                    and "cluster name" in row[0].lower()
+                ):
 
-                    for j in range(i + 1, len(rows)):
+                    value = row[1].strip()
 
-                        value = " ".join(
-                            rows[j]
-                        ).strip()
-
-                        if value:
-                            return value
+                    if value:
+                        return value
 
         return None
 
@@ -302,15 +330,25 @@ class LAPDoc:
             if not lecturer_name:
                 continue
 
-            room = row[4].strip()
+            location = row[4].strip()
+            campus = None
+            room = None
 
-            room = (
-                room
-                .replace("Joondalup", "")
-                .replace("Perth", "")
-                .replace("Midland", "")
-                .strip()
-            )
+            match = re.search(
+                r"(Joondalup|Perth|Midland|Clarkson)\s+([A-Z]\d{3})",
+                location,
+                re.IGNORECASE
+                )
+
+            if match:
+
+                campus = match.group(1)
+
+                room = match.group(2)
+
+            else:
+
+                room = location
 
             lecturers.append({
 
@@ -325,6 +363,9 @@ class LAPDoc:
 
                 "room":
                     room,
+
+                "campus":
+                    campus,
 
                 "contact":
                     row[3].strip()
@@ -665,7 +706,7 @@ class LAPDoc:
 
     def to_lists(self):
 
-        return {
+        return {            
 
             "lap":
                 [self.lap],
