@@ -1,33 +1,90 @@
 import json
 import re
-
-import azure.functions as func
+import html
 
 from urllib.request import Request
 from urllib.request import urlopen
 
 
-app = func.FunctionApp()
-
-
 class UocParser:
 
-    BASE_URL = "https://training.gov.au/Training/Details/{code}"
+    API_BASE = "https://training.gov.au/api"
 
-    def extract(self, unit_code: str):
+    #
+    # Public Entry Point
+    #
+    def extract(self, unit_code):
 
-        html = self._download_page(unit_code)
+        metadata = self.get_metadata(unit_code)
 
-        return {
-            "unitCode": unit_code,
-            "unitTitle": self._extract_title(html),
-            "items": self._extract_all_items(unit_code, html)
+        release_number = self.get_latest_release_number(
+            metadata
+        )
+
+        release = self.get_release(
+            unit_code,
+            release_number
+        )
+
+        items = []
+
+        for bundle in release.get(
+            "contentBundles",
+            []
+        ):
+
+            bundle_data = self.get_bundle(
+                bundle["id"]
+            )
+
+            items.extend(
+                self.parse_bundle(
+                    unit_code,
+                    bundle_data
+                )
+            )
+
+        order = {
+            "Element": 1,
+            "PC": 2,
+            "KE": 3,
+            "PE": 4,
+            "AC": 5
         }
 
-    def _download_page(self, unit_code: str):
+        def sort_key(item):
+            return (
+                order.get(
+                    item["itemType"],
+                    99
+                ),
+                [
+                    int(x)
+                    if x.isdigit()
+                    else x
+                    for x in re.split(
+                        r'(\d+)',
+                        item["id"]
+                    )
+                    if x
+                ]
+            )
+
+        items.sort(key=sort_key)
+
+        return {
+            "unitCode": metadata["code"],
+            "unitTitle": metadata["title"],
+            "items": items
+        }
+    
+    #
+    # API
+    #
+    def get_json(self, url):
 
         request = Request(
-            self.BASE_URL.format(code=unit_code),
+            url,
             headers={
                 "User-Agent": "Mozilla/5.0"
             }
@@ -35,247 +92,490 @@ class UocParser:
 
         with urlopen(request) as response:
 
-            return response.read().decode(
-                "utf-8",
-                errors="ignore"
+            return json.loads(
+                response.read().decode(
+                    "utf-8"
+                )
             )
 
-    def _extract_title(self, html: str):
-
-        match = re.search(
-            r"<title>(.*?)</title>",
-            html,
-            re.IGNORECASE | re.DOTALL
-        )
-
-        if match:
-            return re.sub(
-                r"\s+",
-                " ",
-                match.group(1)
-            ).strip()
-
-        return ""
-
-    def _extract_all_items(
+    def get_metadata(
         self,
-        unit_code: str,
-        html: str
+        unit_code
     ):
 
-        items = []
-
-        items.extend(
-            self._extract_elements(
-                unit_code,
-                html
-            )
+        return self.get_json(
+            f"{self.API_BASE}/training/"
+            f"{unit_code}"
+            f"?include=all"
+            f"&api-version=1.0"
         )
 
-        items.extend(
-            self._extract_pcs(
-                unit_code,
-                html
-            )
-        )
-
-        items.extend(
-            self._extract_ke(
-                unit_code,
-                html
-            )
-        )
-
-        items.extend(
-            self._extract_pe(
-                unit_code,
-                html
-            )
-        )
-
-        items.extend(
-            self._extract_conditions(
-                unit_code,
-                html
-            )
-        )
-
-        return items
-
-    #
-    # ELEMENTS
-    #
-    def _extract_elements(
+    def get_latest_release_number(
         self,
-        unit_code: str,
-        html: str
+        metadata
     ):
 
-        elements = []
-
-        # TODO:
-        # Find Elements section
-        # Build:
-        #
-        # {
-        #   "id": "ICTNWK536.1",
-        #   "parentId": "ICTNWK536",
-        #   "itemType": "Element"
-        # }
-
-        return elements
-
-    #
-    # PERFORMANCE CRITERIA
-    #
-    def _extract_pcs(
-        self,
-        unit_code: str,
-        html: str
-    ):
-
-        pcs = []
-
-        # TODO:
-        # Create IDs:
-        #
-        # ICTNWK536.1.1
-        # ICTNWK536.1.2
-
-        return pcs
-
-    #
-    # KNOWLEDGE EVIDENCE
-    #
-    def _extract_ke(
-        self,
-        unit_code: str,
-        html: str
-    ):
-
-        items = []
-
-        # TODO:
-        # Create IDs:
-        #
-        # ICTNWK536.KE1
-        # ICTNWK536.KE1.1
-
-        return items
-
-    #
-    # PERFORMANCE EVIDENCE
-    #
-    def _extract_pe(
-        self,
-        unit_code: str,
-        html: str
-    ):
-
-        items = []
-
-        # TODO:
-        # Create IDs:
-        #
-        # ICTNWK536.PE1
-        # ICTNWK536.PE1.1
-
-        return items
-
-    #
-    # ASSESSMENT CONDITIONS
-    #
-    def _extract_conditions(
-        self,
-        unit_code: str,
-        html: str
-    ):
-
-        items = []
-
-        # TODO:
-        # Create IDs:
-        #
-        # ICTNWK536.AC1
-        # ICTNWK536.AC1.1
-
-        return items
-
-
-@app.route(
-    route="get-uocinfo",
-    methods=["POST"],
-    auth_level=func.AuthLevel.FUNCTION
-)
-def get_uoc_info(
-    req: func.HttpRequest
-) -> func.HttpResponse:
-
-    try:
-
-        body = req.get_json()
-
-        unit_codes = body.get(
-            "unitCodes",
+        releases = metadata.get(
+            "releases",
             []
         )
 
-        parser = UocParser()
+        if not releases:
 
-        output = []
+            raise Exception(
+                "No releases found"
+            )
 
-        for code in unit_codes:
+        return releases[0][
+            "releaseNumber"
+        ]
 
-            #
-            # Skip Victorian units
-            #
-            if code.upper().startswith("VU"):
+    def get_release(
+        self,
+        unit_code,
+        release_number
+    ):
 
-                output.append(
+        return self.get_json(
+            f"{self.API_BASE}/training/"
+            f"{unit_code}/releases/"
+            f"{release_number}"
+            f"?include=all"
+            f"&api-version=1.0"
+        )
+
+    def get_bundle(
+        self,
+        bundle_id
+    ):
+
+        return self.get_json(
+            f"{self.API_BASE}/content/bundle/"
+            f"{bundle_id}"
+        )
+
+    #
+    # Bundle Processing
+    #
+    def parse_bundle(
+        self,
+        unit_code,
+        bundle
+    ):
+
+        items = []
+
+        for bundle_item in bundle.get(
+            "items",
+            []
+        ):
+
+            content_type = bundle_item.get(
+                "contentType"
+            )
+
+            content = html.unescape(
+                bundle_item.get(
+                    "content",
+                    ""
+                )
+            )
+
+            if (
+                content_type
+                == "PerformanceCriteria"
+            ):
+
+                items.extend(
+                    self.parse_performance_criteria(
+                        unit_code,
+                        content
+                    )
+                )
+
+            elif (
+                content_type
+                == "KnowledgeEvidence"
+            ):
+
+                items.extend(
+                    self.parse_hierarchy(
+                        unit_code,
+                        content,
+                        "KE"
+                    )
+                )
+
+            elif (
+                content_type
+                == "PerformanceEvidence"
+            ):
+
+                items.extend(
+                    self.parse_hierarchy(
+                        unit_code,
+                        content,
+                        "PE"
+                    )
+                )
+
+            elif (
+                content_type
+                == "AssessmentConditions"
+            ):
+
+                items.extend(
+                    self.parse_hierarchy(
+                        unit_code,
+                        content,
+                        "AC"
+                    )
+                )
+
+        return items
+
+    #
+    # Elements + PCs
+    #
+    def parse_performance_criteria(
+        self,
+        unit_code,
+        content
+    ):
+
+        items = []
+
+        rows = re.findall(
+            r"<tr>(.*?)</tr>",
+            content,
+            re.DOTALL
+        )
+
+        current_element_id = None
+
+        for row in rows:
+
+            paragraphs = re.findall(
+                r"<p>(.*?)</p>",
+                row,
+                re.DOTALL
+            )
+
+            cleaned = []
+
+            for p in paragraphs:
+
+                text = self.clean_text(p)
+
+                if text:
+
+                    cleaned.append(text)
+
+            if not cleaned:
+                continue
+
+            first = cleaned[0]
+
+            element_match = re.match(
+                r"^(\d+)\.\s+(.*)",
+                first
+            )
+
+            if element_match:
+
+                element_no = (
+                    element_match.group(1)
+                )
+
+                element_text = (
+                    element_match.group(2)
+                )
+
+                current_element_id = (
+                    f"{unit_code}."
+                    f"{element_no}"
+                )
+
+                items.append(
                     {
-                        "unitCode": code,
-                        "status": "Skipped",
-                        "reason": "Victorian accredited unit"
+                        "id":
+                            current_element_id,
+                        "parentId":
+                            unit_code,
+                        "itemType":
+                            "Element",
+                        "referenceNo":
+                            element_no,
+                        "description":
+                            element_text
                     }
                 )
+
+                for line in cleaned[1:]:
+
+                    pc_match = re.match(
+                        r"^(\d+\.\d+)\s+(.*)",
+                        line
+                    )
+
+                    if pc_match:
+
+                        pc_no = (
+                            pc_match.group(1)
+                        )
+
+                        pc_text = (
+                            pc_match.group(2)
+                        )
+
+                        items.append(
+                            {
+                                "id":
+                                    f"{unit_code}.{pc_no}",
+                                "parentId":
+                                    current_element_id,
+                                "itemType":
+                                    "PC",
+                                "referenceNo":
+                                    pc_no,
+                                "description":
+                                    pc_text
+                            }
+                        )
+
+        return items
+
+    #
+    # KE / PE / AC
+    #
+    def parse_hierarchy(
+        self,
+        unit_code,
+        content,
+        prefix
+    ):
+
+        roots = self.extract_nested_list(
+            content
+        )
+
+        items = []
+
+        counter = 1
+
+        for node in roots:
+
+            id_val = (
+                f"{unit_code}."
+                f"{prefix}"
+                f"{counter}"
+            )
+
+            items.append(
+                {
+                    "id": id_val,
+                    "parentId":
+                        unit_code,
+                    "itemType":
+                        prefix,
+                    "referenceNo":
+                        f"{prefix}{counter}",
+                    "description":
+                        self.cleanup_heading(
+                            node["text"]
+                        )
+                }
+            )
+
+            self.add_children(
+                items,
+                id_val,
+                node["children"],
+                prefix
+            )
+
+            counter += 1
+
+        return items
+
+    def add_children(
+        self,
+        items,
+        parent_id,
+        children,
+        prefix
+    ):
+
+        child_no = 1
+
+        for child in children:
+
+            child_id = (
+                f"{parent_id}."
+                f"{child_no}"
+            )
+
+            items.append(
+                {
+                    "id":
+                        child_id,
+                    "parentId":
+                        parent_id,
+                    "itemType":
+                        prefix,
+                    "referenceNo": ".".join(
+                            child_id.split(".")[1:]
+                        ),
+                    "description":
+                        self.cleanup_heading(
+                            child["text"]
+                        )
+                }
+            )
+
+            self.add_children(
+                items,
+                child_id,
+                child["children"],
+                prefix
+            )
+
+            child_no += 1
+
+    #
+    # Nested UL Parsing
+    #
+    def cleanup_heading(self, text):
+        text = re.sub(
+            r',?\s*including:\s*$',
+            '',
+            text,
+            flags=re.IGNORECASE
+        )
+        
+        text = re.sub(
+            r':\s*$',
+            '',
+            text
+        )        
+
+        text = text.strip()
+        return text
+
+    def extract_nested_list(
+        self,
+        html_text
+    ):
+
+        html_text = re.sub(
+            r"</p>",
+            "",
+            html_text
+        )
+
+        html_text = re.sub(
+            r"<p[^>]*>",
+            "",
+            html_text
+        )
+
+        token_pattern = (
+            r"<ul>|</ul>|<li>|</li>|[^<>]+"
+        )
+
+        tokens = re.findall(
+            token_pattern,
+            html_text,
+            re.DOTALL
+        )
+
+        roots = []
+        stack = []
+
+        for token in tokens:
+
+            token = token.strip()
+
+            if not token:
+                continue
+
+            if token == "<li>":
+
+                node = {
+                    "text": "",
+                    "children": []
+                }
+
+                if stack:
+
+                    stack[-1][
+                        "children"
+                    ].append(node)
+
+                else:
+
+                    roots.append(node)
+
+                stack.append(node)
+
+            elif token == "</li>":
+
+                if stack:
+                    stack.pop()
+
+            elif token.startswith("<"):
 
                 continue
 
-            try:
+            else:
 
-                output.append(
-                    parser.extract(code)
-                )
+                if stack:
 
-            except Exception as ex:
+                    text = self.clean_text(
+                        token
+                    )
 
-                output.append(
-                    {
-                        "unitCode": code,
-                        "status": "Error",
-                        "message": str(ex)
-                    }
-                )
+                    if text:
 
-        return func.HttpResponse(
-            json.dumps(
-                {
-                    "units": output
-                }
-            ),
-            mimetype="application/json",
-            status_code=200
+                        if stack[-1][
+                            "text"
+                        ]:
+
+                            stack[-1][
+                                "text"
+                            ] += (
+                                " "
+                                + text
+                            )
+
+                        else:
+
+                            stack[-1][
+                                "text"
+                            ] = text
+
+        return roots
+
+    #
+    # Helpers
+    #
+    def clean_text(
+        self,
+        text
+    ):
+
+        text = re.sub(
+            r"<.*?>",
+            "",
+            text
         )
 
-    except Exception as ex:
+        text = html.unescape(text)
 
-        return func.HttpResponse(
-            json.dumps(
-                {
-                    "status": "Error",
-                    "message": str(ex)
-                }
-            ),
-            mimetype="application/json",
-            status_code=500
+        text = re.sub(
+            r"\s+",
+            " ",
+            text
         )
+
+        return text.strip()
