@@ -1,6 +1,7 @@
 import json
 import re
 import html
+from dtwdclient import DtwdClient
 
 from urllib.request import Request
 from urllib.request import urlopen
@@ -10,12 +11,19 @@ class UocParser:
 
     API_BASE = "https://training.gov.au/api"
 
+    def __init__(self):
+        self.dtwd = DtwdClient()
+
     #
     # Public Entry Point
     #
     def extract(self, unit_code):
 
         metadata = self.get_metadata(unit_code)
+
+        dtwd = self.dtwd.get_unit_metadata(
+            unit_code
+        )
 
         release_number = self.get_latest_release_number(
             metadata
@@ -73,9 +81,46 @@ class UocParser:
         items.sort(key=sort_key)
 
         return {
-            "unitCode": metadata["code"],
-            "unitTitle": metadata["title"],
-            "items": items
+            "type": "Unit",
+
+            "unitCode":
+                metadata["code"],
+
+            "unitTitle":
+                metadata["title"],
+
+            "stateCode":
+                dtwd.get(
+                    "stateCode"
+                ),
+
+            "dtwdStatus":
+                dtwd.get(
+                    "dtwdStatus"
+                ),
+
+            "approvedDate":
+                dtwd.get(
+                    "approvedDate"
+                ),
+
+            "nominalHours":
+                dtwd.get(
+                    "nominalHours"
+                ),
+
+            "fieldOfEducation":
+                dtwd.get(
+                    "fieldOfEducation"
+                ),
+
+            "detailUrl":
+                dtwd.get(
+                    "detailUrl"
+                ),
+
+            "items":
+                items
         }
     
     #

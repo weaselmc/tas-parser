@@ -15,7 +15,7 @@ except Exception as ex:
 import azure.functions as func
 from tas_parser import TASDoc
 from lap_parser import LAPDoc
-from get_uocinfo import UocParser
+from tp_parser import TpParser
 
 app = func.FunctionApp()
 @app.route(
@@ -99,27 +99,27 @@ def parse_lap(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 @app.route(
-    route="get-uocinfo",
+    route="tpinfo",
     methods=["POST"],
     auth_level=func.AuthLevel.FUNCTION
 )
 
-def get_uoc_info(req: func.HttpRequest) -> func.HttpResponse:
+def tp_info(req: func.HttpRequest) -> func.HttpResponse:
 
     body = req.get_json()
 
-    unit_codes = body.get("unitCodes", [])
+    codes = body.get("codes", [])
 
-    parser = UocParser()
+    parser = TpParser()
 
     result = []
 
-    for code in unit_codes:
+    for code in codes:
 
         if code.upper().startswith("VU"):
 
             result.append({
-                "unitCode": code,
+                "code": code,
                 "status": "Skipped",
                 "reason": "Victorian accredited unit"
             })

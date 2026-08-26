@@ -1,9 +1,8 @@
 import json
 
-from get_uocinfo import UocParser
+from tp_parser import TPParser
 
-
-parser = UocParser()
+parser = TPParser()
 
 result = parser.extract("ICTNWK536")
 
