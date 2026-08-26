@@ -4,7 +4,7 @@ from tp_parser import TPParser
 
 parser = TPParser()
 
-result = parser.extract("ICTNWK536")
+result = parser.extract("22063VIC")
 
 print(
     json.dumps(

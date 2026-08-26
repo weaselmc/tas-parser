@@ -15,7 +15,7 @@ except Exception as ex:
 import azure.functions as func
 from tas_parser import TASDoc
 from lap_parser import LAPDoc
-from tp_parser import TpParser
+from tp_parser import TPParser
 
 app = func.FunctionApp()
 @app.route(
@@ -110,7 +110,7 @@ def tp_info(req: func.HttpRequest) -> func.HttpResponse:
 
     codes = body.get("codes", [])
 
-    parser = TpParser()
+    parser = TPParser()
 
     result = []
 
