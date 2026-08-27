@@ -19,7 +19,20 @@ class TPParser:
         code = code.strip().upper()
 
         #
-        # Qualification
+        # Accredited Course
+        # 22697VIC
+        #
+        if re.match(
+            r"^\d+VIC$",
+            code
+        ):
+            return self.qual.extract(
+                code
+            )
+
+        #
+        # Training Package Qualification
+        # ICT50220
         #
         if re.match(
             r"^[A-Z]{3}\d{5}$",
@@ -30,10 +43,23 @@ class TPParser:
             )
 
         #
-        # Unit
+        # Victorian Unit
+        # VU23884
         #
         if re.match(
-            r"^[A-Z]{6}\d{3}$",
+            r"^VU\d+$",
+            code
+        ):
+            return self.uoc.extract(
+                code
+            )
+
+        #
+        # Training Package Unit
+        # ICTNWK536
+        #
+        if re.match(
+            r"^[A-Z]{2,}\d{3,}$",
             code
         ):
             return self.uoc.extract(
