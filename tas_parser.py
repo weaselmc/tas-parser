@@ -541,6 +541,9 @@ class TASDoc:
         if "joondalup" in campus:
             result["campus_code"] = "J"
 
+        elif "east perth" in campus:
+            result["campus_code"] = "EP"
+
         elif "perth" in campus:
             result["campus_code"] = "P"
 
@@ -1058,7 +1061,7 @@ class TASDoc:
                 code = row[1].strip()
 
                 if not re.fullmatch(
-                    r"[A-Z]{3,}\d{3,}",
+                    r"[A-Z]+\d+",
                     code
                 ):
                     continue
