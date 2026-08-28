@@ -22,58 +22,89 @@ class QualParser:
         qualification_code
     ):
 
-        metadata = self.get_metadata(
+        qualification_code = (
             qualification_code
+            .strip()
+            .upper()
         )
 
-        dtwd = self.dtwd.get_qualification_metadata(
+        #
+        # Training.gov.au may not support
+        # accredited courses well, so make
+        # metadata optional.
+        #
+        try:
+
+            metadata = self.get_metadata(
+                qualification_code
+            )
+
+            title = metadata.get(
+                "title"
+            )
+
+            national_code = metadata.get(
+                "code"
+            )
+
+        except Exception:
+
+            metadata = {}
+
+            title = None
+
+            national_code = (
+                qualification_code
+            )
+
+        #
+        # DTWD is now the primary source
+        #
+        dtwd = self.dtwd.get_metadata(
             qualification_code
         )
 
         return {
-            "type": "Qualification",
+            "type":
+                dtwd.get("type"),
 
             "qualificationCode":
-                metadata["code"],
+                national_code
+                or dtwd.get("nationalCode"),
 
             "qualificationTitle":
-                metadata["title"],
+                title
+                or dtwd.get("title"),
 
             "stateCode":
-                dtwd.get(
-                    "stateCode"
-                ),
+                dtwd.get("stateCode"),
 
             "dtwdStatus":
-                dtwd.get(
-                    "dtwdStatus"
-                ),
+                dtwd.get("dtwdStatus"),
+
+            "tgaStatus":
+                dtwd.get("tgaStatus"),
 
             "approvedDate":
-                dtwd.get(
-                    "approvedDate"
-                ),
+                dtwd.get("approvedDate"),
 
             "nominalHours":
-                dtwd.get(
-                    "nominalHours"
-                ),
+                dtwd.get("nominalHours"),
 
             "fieldOfEducation":
-                dtwd.get(
-                    "fieldOfEducation"
-                ),
+                dtwd.get("fieldOfEducation"),
 
             "detailUrl":
-                dtwd.get(
-                    "detailUrl"
-                ),
+                dtwd.get("detailUrl"),
 
             "pathways":
-                dtwd.get(
-                    "pathways",
-                    []
-                )
+                dtwd.get("pathways", []),
+
+            "coreUnits":
+                dtwd.get("coreUnits", []),
+
+            "electiveUnits":
+                dtwd.get("electiveUnits", [])
         }
 
     #
@@ -92,7 +123,9 @@ class QualParser:
             }
         )
 
-        with urlopen(request) as response:
+        with urlopen(
+            request
+        ) as response:
 
             return json.loads(
                 response.read().decode(

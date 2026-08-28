@@ -31,7 +31,7 @@ class TPParser:
             )
 
         #
-        # Training Package Qualification
+        # Qualification
         # ICT50220
         #
         if re.match(

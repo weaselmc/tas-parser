@@ -1,85 +1,26 @@
 import html
 import re
 
-from lxml import html as lxml_html
-from lxml import etree
-
-from http.cookiejar import CookieJar
 from urllib.parse import urlencode
-from urllib.request import (
-    Request,
-    build_opener,
-    HTTPCookieProcessor
-)
+from urllib.request import Request
+from urllib.request import urlopen
+
+from lxml import html as lxml_html
 
 
 class DtwdClient:
 
-    SEARCH_URL = (
-        "https://tps.dtwd.wa.gov.au/apps/tps/Pages/default.aspx"
-    )
+    BASE_URL = "https://tps.dtwd.wa.gov.au"
 
-    BASE_URL = (
-        "https://tps.dtwd.wa.gov.au"
-    )
-
-    IDENTIFIER_FIELD = (
-        "ctl00$SPWebPartManager1$g_72b3d09c_3e10_4bd3_8b9c_f4643f192177"
-        "$ctl00$IdentifierTextBox"
-    )
-
-    SEARCH_BUTTON = (
-        "ctl00$SPWebPartManager1$g_72b3d09c_3e10_4bd3_8b9c_f4643f192177"
-        "$ctl00$SearchButton"
-    )
-
-    def __init__(self):
-
-        self.cookie_jar = CookieJar()
-
-        self.opener = build_opener(
-            HTTPCookieProcessor(
-                self.cookie_jar
-            )
-        )
-
-    #
-    # CODE TYPES
-    #
-    def is_qualification_code(
+    def get_metadata(
         self,
         code
     ):
 
-        return bool(
-            re.match(
-                r"^[A-Z]{3}\d{5}$",
-                code
-            )
-        )
-
-    def is_unit_code(
-        self,
-        code
-    ):
-
-        return bool(
-            re.match(
-                r"^[A-Z]{6}\d{3}$",
-                code
-            )
-        )
-
-    #
-    # QUALIFICATIONS
-    #
-    def get_qualification_metadata(
-        self,
-        qualification_code
-    ):
+        code = code.strip().upper()
 
         search_html = self.search(
-            qualification_code
+            code
         )
 
         detail_url = self.extract_detail_url(
@@ -90,291 +31,300 @@ class DtwdClient:
             detail_url
         )
 
-        result = {
-            "type": "Qualification",
-            "guid": self.extract_guid(
-                detail_url
-            ),
-            "nationalCode": self.extract_span(
-                detail_html,
-                "NationalCodeLabel"
-            ),
-            "title": self.extract_span(
-                detail_html,
-                "NameLabel"
-            ),
-            "stateCode": self.extract_span(
-                detail_html,
-                "StateCodeLabel"
-            ),
-            "tgaStatus": self.extract_span(
-                detail_html,
-                "TgaStatusLabel"
-            ),
-            "dtwdStatus": self.extract_span(
-                detail_html,
-                "DtwdStatusLabel"
-            ),
-            "approvedDate": self.extract_span(
-                detail_html,
-                "ApprovedDateLabel"
-            ),
-            "nominalHours": self.extract_span(
-                detail_html,
-                "NominalHourLabel"
-            ),
-            "fieldOfEducation": self.extract_span(
-                detail_html,
-                "FieldOfEducationLabel"
-            ),
-            "detailUrl": detail_url,
-            "pathways": []
-        }
+        if "/course/" in detail_url:
 
-        try:
-
-            schedule_html = self.get_schedule_html(
-                detail_url
-            )
-            
-            result["pathways"] = (
-                self.extract_pathways(
-                    schedule_html
-                )
+            return self.get_course_metadata(
+                detail_url,
+                detail_html
             )
 
-        except Exception as ex:
+        if "/qualification/" in detail_url:
 
-            print(
-                f"Schedule extraction failed: {ex}"
+            return self.get_qualification_metadata(
+                detail_url,
+                detail_html
             )
 
-        return result
+        if (
+            "/unit-of-competency/" in detail_url
+            or "/module/" in detail_url
+        ):
 
-    #
-    # UNITS
-    #
-    def get_unit_metadata(
-        self,
-        unit_code
-    ):
+            return self.get_unit_metadata(
+                detail_url,
+                detail_html
+            )
 
-        search_html = self.search(
-            unit_code
+        raise Exception(
+            f"Unknown TPS type [{detail_url}]"
         )
-
-        detail_url = self.extract_detail_url(
-            search_html
-        )
-
-        detail_html = self.get_html(
-            detail_url
-        )
-
-        return {
-            "type": "Unit",
-            "guid": self.extract_guid(
-                detail_url
-            ),
-            "nationalCode": self.extract_span(
-                detail_html,
-                "NationalCodeLabel"
-            ),
-            "title": self.extract_span(
-                detail_html,
-                "NameLabel"
-            ),
-            "stateCode": self.extract_span(
-                detail_html,
-                "StateCodeLabel"
-            ),
-            "tgaStatus": self.extract_span(
-                detail_html,
-                "TgaStatusLabel"
-            ),
-            "dtwdStatus": self.extract_span(
-                detail_html,
-                "DtwdStatusLabel"
-            ),
-            "approvedDate": self.extract_span(
-                detail_html,
-                "ApprovedDateLabel"
-            ),
-            "nominalHours": self.extract_span(
-                detail_html,
-                "NominalHourLabel"
-            ),
-            "fieldOfEducation": self.extract_span(
-                detail_html,
-                "FieldOfEducationLabel"
-            ),
-            "detailUrl": detail_url
-        }
 
     #
     # SEARCH
     #
     def search(
         self,
-        identifier
+        code
     ):
 
-        page_html = self.get_html(
-            self.SEARCH_URL
+        url = (
+            f"{self.BASE_URL}"
+            f"/?{urlencode({'Code': code})}"
         )
 
-        payload = {
-
-            "__VIEWSTATE":
-                self.extract_hidden(
-                    page_html,
-                    "__VIEWSTATE"
-                ),
-
-            "__VIEWSTATEGENERATOR":
-                self.extract_hidden(
-                    page_html,
-                    "__VIEWSTATEGENERATOR"
-                ),
-
-            "__EVENTVALIDATION":
-                self.extract_hidden(
-                    page_html,
-                    "__EVENTVALIDATION"
-                ),
-
-            "__REQUESTDIGEST":
-                self.extract_hidden(
-                    page_html,
-                    "__REQUESTDIGEST"
-                ),
-
-            "__EVENTTARGET": "",
-            "__EVENTARGUMENT": "",
-
-            "ctl00$SPWebPartManager1$g_72b3d09c_3e10_4bd3_8b9c_f4643f192177$ctl00$AllCheckBox":
-                "on",
-
-            "ctl00$SPWebPartManager1$g_72b3d09c_3e10_4bd3_8b9c_f4643f192177$ctl00$IncludeSupersededCheckBox":
-                "on",
-
-            self.IDENTIFIER_FIELD:
-                identifier,
-
-            self.SEARCH_BUTTON:
-                "Search"
-        }
-
-        return self.post_html(
-            self.SEARCH_URL,
-            payload
-        )
+        return self.get_html(url)
 
     #
-    # SCHEDULE TAB
+    # QUALIFICATIONS
     #
-    def get_schedule_html(
+    def get_qualification_metadata(
         self,
-        qualification_url
+        detail_url,
+        detail_html
     ):
-        page_html = self.get_html(
-            qualification_url
+
+        units = self.extract_units(
+            detail_html
         )
 
-        match = re.search(
-            r'WebForm_PostBackOptions\(&quot;([^"]*ScheduleLinkButton)&quot;',
-            page_html,
-            re.IGNORECASE
+        print(
+            f"Extracted {len(units)} units"
         )
 
-        if not match:
-            raise Exception(
-                "ScheduleLinkButton postback target not found"
-            )
+        return {
+            "type": "Qualification",
+            "guid": self.extract_guid(
+                detail_url
+            ),
+            "nationalCode": self.extract_value(
+                detail_html,
+                "National Code"
+            ),
+            "title": self.extract_title(
+                detail_html
+            ),
+            "stateCode": self.extract_value(
+                detail_html,
+                "State Code"
+            ),
+            "tgaStatus": self.extract_value(
+                detail_html,
+                "TGA Status"
+            ),
+            "dtwdStatus": self.extract_value(
+                detail_html,
+                "DTWD Status"
+            ),
+            "approvedDate": self.extract_value(
+                detail_html,
+                "Approved Date"
+            ),
+            "nominalHours": self.extract_value(
+                detail_html,
+                "Nominal Hours"
+            ),
+            "fieldOfEducation": self.extract_value(
+                detail_html,
+                "Field of Education"
+            ),
+            "detailUrl": detail_url,
 
-        event_target = match.group(1)
+            "pathways": self.extract_pathways(
+                detail_html
+            ),
 
-        payload = {
+            "coreUnits": [
+                u for u in units
+                if u["section"] == "Core"
+            ],
 
-            "__VIEWSTATE":
-                self.extract_hidden(
-                    page_html,
-                    "__VIEWSTATE"
-                ),
-
-            "__VIEWSTATEGENERATOR":
-                self.extract_hidden(
-                    page_html,
-                    "__VIEWSTATEGENERATOR"
-                ),
-
-            "__EVENTVALIDATION":
-                self.extract_hidden(
-                    page_html,
-                    "__EVENTVALIDATION"
-                ),
-
-            "__REQUESTDIGEST":
-                self.extract_hidden(
-                    page_html,
-                    "__REQUESTDIGEST"
-                ),
-
-            "__EVENTTARGET":
-                match.group(1),
-
-            "__EVENTARGUMENT":
-                ""
+            "electiveUnits": [
+                u for u in units
+                if u["section"] == "Elective"
+            ]
         }
 
-        return self.post_html(
-            qualification_url,
-            payload
+    #
+    # ACCREDITED COURSES
+    #
+    def get_course_metadata(
+        self,
+        detail_url,
+        detail_html
+    ):
+
+        units = self.extract_units(
+            detail_html
         )
+
+        print(
+            f"Extracted {len(units)} units"
+        )
+
+        return {
+            "type": "AccreditedCourse",
+            "guid": self.extract_guid(
+                detail_url
+            ),
+            "nationalCode": self.extract_value(
+                detail_html,
+                "National Code"
+            ),
+            "title": self.extract_title(
+                detail_html
+            ),
+            "stateCode": self.extract_value(
+                detail_html,
+                "State Code"
+            ),
+            "tgaStatus": self.extract_value(
+                detail_html,
+                "TGA Status"
+            ),
+            "dtwdStatus": self.extract_value(
+                detail_html,
+                "DTWD Status"
+            ),
+            "approvedDate": self.extract_value(
+                detail_html,
+                "Approved Date"
+            ),
+            "nominalHours": self.extract_value(
+                detail_html,
+                "Nominal Hours"
+            ),
+            "fieldOfEducation": self.extract_value(
+                detail_html,
+                "Field of Education"
+            ),
+            "detailUrl": detail_url,
+
+            "pathways": self.extract_pathways(
+                detail_html
+            ),
+
+            "coreUnits": [
+                u for u in units
+                if u["section"] == "Core"
+            ],
+
+            "electiveUnits": [
+                u for u in units
+                if u["section"] == "Elective"
+            ]
+        }
+
+    #
+    # UNITS / MODULES
+    #
+    def get_unit_metadata(
+        self,
+        detail_url,
+        detail_html
+    ):
+
+        return {
+            "type": "Unit",
+            "guid": self.extract_guid(
+                detail_url
+            ),
+            "nationalCode": self.extract_value(
+                detail_html,
+                "National Code"
+            ),
+            "title": self.extract_title(
+                detail_html
+            ),
+            "stateCode": self.extract_value(
+                detail_html,
+                "State Code"
+            ),
+            "tgaStatus": self.extract_value(
+                detail_html,
+                "TGA Status"
+            ),
+            "dtwdStatus": self.extract_value(
+                detail_html,
+                "DTWD Status"
+            ),
+            "approvedDate": self.extract_value(
+                detail_html,
+                "Approved Date"
+            ),
+            "nominalHours": self.extract_value(
+                detail_html,
+                "Nominal Hours"
+            ),
+            "fieldOfEducation": self.extract_value(
+                detail_html,
+                "Field of Education"
+            ),
+            "detailUrl": detail_url
+        }
 
     #
     # PATHWAYS
     #
-
     def extract_pathways(
         self,
-        schedule_html
+        detail_html
     ):
 
         doc = lxml_html.fromstring(
-            schedule_html
+            detail_html
         )
 
         pathways = []
+        seen = set()
 
-        links = doc.xpath(
-            "//a[contains(@href,'PathwayDetails.aspx')]"
+        rows = doc.xpath(
+            "//table//tr[.//a[contains(@href,'/pathway/')]]"
         )
 
-        for link in links:
+        for row in rows:
 
-            text = (
-                link.text_content()
+            cells = row.xpath("./td")
+
+            if len(cells) < 2:
+                continue
+
+            state_code = (
+                cells[0]
+                .text_content()
                 .strip()
             )
 
-            lines = [
-                line.strip()
-                for line in text.splitlines()
-                if line.strip()
-            ]
+            stream_name = (
+                cells[1]
+                .text_content()
+                .strip()
+            )
 
-            if len(lines) < 2:
+            href = cells[0].xpath(
+                ".//a/@href"
+            )
+
+            pathway_url = (
+                href[0]
+                if href else ""
+            )
+
+            if pathway_url.startswith("/"):
+
+                pathway_url = (
+                    self.BASE_URL
+                    + pathway_url
+                )
+
+            key = (
+                state_code,
+                stream_name
+            )
+
+            if key in seen:
                 continue
 
-            state_code = lines[0]
-            stream_name = lines[1]
-            pathway_url = link.get("href")
-            if pathway_url.startswith("/"):
-                pathway_url = (
-                self.BASE_URL
-                + pathway_url
-                )
+            seen.add(key)
 
             pathways.append(
                 {
@@ -385,6 +335,123 @@ class DtwdClient:
             )
 
         return pathways
+
+    #
+    # CORE / ELECTIVE UNITS
+    #
+    def extract_units(
+        self,
+        detail_html
+    ):
+
+        doc = lxml_html.fromstring(
+            detail_html
+        )
+
+        units = []
+
+        headings = doc.xpath(
+            "//h5"
+        )
+
+        for heading in headings:
+
+            heading_text = (
+                heading.text_content()
+                .strip()
+            )
+
+            section = None
+            stream = None
+
+            if re.search(
+                r"core units",
+                heading_text,
+                re.IGNORECASE
+            ):
+
+                section = "Core"
+
+            elif (
+                re.search(
+                    r"elective units",
+                    heading_text,
+                    re.IGNORECASE
+                )
+                or
+                re.search(
+                    r"group\s+[A-Z]",
+                    heading_text,
+                    re.IGNORECASE
+                )
+            ):
+
+                section = "Elective"
+
+                stream = re.sub(
+                    r"^\d+\.\s*",
+                    "",
+                    heading_text
+                ).strip()
+
+            else:
+                continue
+
+            table = heading.xpath(
+                "following::table[1]"
+            )
+
+            rows = table[0].xpath(".//tr")
+
+            if not table:
+                continue
+
+            table = table[0]
+
+            rows = table.xpath(
+                ".//tr"
+            )
+
+            for row in rows:
+
+                cells = row.xpath("./td")
+
+                if len(cells) < 5:
+                    continue
+
+                units.append(
+                    {
+                        "section": section,
+                        "stream": stream,
+
+                        "stateCode":
+                            cells[0]
+                            .text_content()
+                            .strip(),
+
+                        "nationalCode":
+                            cells[1]
+                            .text_content()
+                            .strip(),
+
+                        "title":
+                            cells[2]
+                            .text_content()
+                            .strip(),
+
+                        "hours":
+                            cells[3]
+                            .text_content()
+                            .strip(),
+
+                        "type":
+                            cells[4]
+                            .text_content()
+                            .strip()
+                    }
+                )
+
+        return units
 
     #
     # HTTP
@@ -402,40 +469,7 @@ class DtwdClient:
             }
         )
 
-        with self.opener.open(
-            request
-        ) as response:
-
-            return response.read().decode(
-                "utf-8",
-                errors="ignore"
-            )
-
-    def post_html(
-        self,
-        url,
-        payload
-    ):
-
-        encoded = urlencode(
-            payload
-        ).encode(
-            "utf-8"
-        )
-
-        request = Request(
-            url,
-            data=encoded,
-            headers={
-                "User-Agent":
-                    "Mozilla/5.0",
-
-                "Content-Type":
-                    "application/x-www-form-urlencoded"
-            }
-        )
-
-        with self.opener.open(
+        with urlopen(
             request
         ) as response:
 
@@ -447,27 +481,6 @@ class DtwdClient:
     #
     # HELPERS
     #
-    def extract_hidden(
-        self,
-        html_text,
-        field_name
-    ):
-
-        match = re.search(
-            rf'id="{field_name}"[^>]*value="([^"]*)"',
-            html_text,
-            re.I
-        )
-
-        if not match:
-            raise Exception(
-                f"{field_name} not found"
-            )
-
-        return html.unescape(
-            match.group(1)
-        )
-
     def extract_detail_url(
         self,
         html_text
@@ -475,9 +488,13 @@ class DtwdClient:
 
         patterns = [
 
-            r'href="([^"]*UoCEndorsement\.aspx[^"]+)"',
+            r'href="([^"]*/course/[^"]+)"',
 
-            r'href="([^"]*QualificationEndorsement\.aspx[^"]+)"'
+            r'href="([^"]*/qualification/[^"]+)"',
+
+            r'href="([^"]*/unit-of-competency/[^"]+)"',
+
+            r'href="([^"]*/module/[^"]+)"'
         ]
 
         for pattern in patterns:
@@ -485,23 +502,23 @@ class DtwdClient:
             match = re.search(
                 pattern,
                 html_text,
-                re.I
+                re.IGNORECASE
             )
 
             if match:
 
-                url = html.unescape(
+                href = html.unescape(
                     match.group(1)
                 )
 
-                if url.startswith("/"):
+                if href.startswith("/"):
 
                     return (
                         self.BASE_URL
-                        + url
+                        + href
                     )
 
-                return url
+                return href
 
         raise Exception(
             "Detail link not found"
@@ -515,7 +532,7 @@ class DtwdClient:
         match = re.search(
             r'([a-f0-9\-]{36})',
             url,
-            re.I
+            re.IGNORECASE
         )
 
         return (
@@ -524,27 +541,49 @@ class DtwdClient:
             else None
         )
 
-    def extract_span(
+    def extract_title(
         self,
-        html_text,
-        id_fragment
+        html_text
     ):
 
-        match = re.search(
-            rf'id="[^"]*{id_fragment}"[^>]*>(.*?)</span>',
-            html_text,
-            re.I | re.S
+        doc = lxml_html.fromstring(
+            html_text
         )
 
-        if not match:
+        title = doc.xpath(
+            "//h4[1]/text()"
+        )
+
+        return (
+            title[0].strip()
+            if title
+            else ""
+        )
+
+    def extract_value(
+        self,
+        html_text,
+        label
+    ):
+
+        doc = lxml_html.fromstring(
+            html_text
+        )
+
+        elements = doc.xpath(
+            f"//strong[contains(text(),'{label}')]"
+        )
+
+        if not elements:
             return ""
 
-        text = re.sub(
-            r"<.*?>",
-            "",
-            match.group(1)
+        parent = elements[0].getparent()
+
+        text = (
+            parent.text_content()
+            .replace(label, "", 1)
+            .lstrip(":")
+            .strip()
         )
 
-        return html.unescape(
-            text
-        ).strip()
+        return text
