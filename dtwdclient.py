@@ -1,4 +1,5 @@
 import html
+import json
 import re
 
 from urllib.parse import urlencode
@@ -87,8 +88,8 @@ class DtwdClient:
             detail_html
         )
 
-        print(
-            f"Extracted {len(units)} units"
+        packaging = self.extract_packaging_rules(
+            detail_html
         )
 
         return {
@@ -133,12 +134,27 @@ class DtwdClient:
                 detail_html
             ),
 
-            "coreUnits": [
+            "packagingRules":
+                packaging["packagingRules"],
+
+            "totalUnits":
+                packaging["totalUnits"],
+
+            "coreUnits":
+                packaging["coreUnits"],
+
+            "electiveUnits":
+                packaging["electiveUnits"],
+
+            "requiredSpecialisationUnits":
+                packaging["requiredSpecialisationUnits"],
+
+            "coreUnitList": [
                 u for u in units
                 if u["section"] == "Core"
             ],
 
-            "electiveUnits": [
+            "electiveUnitList": [
                 u for u in units
                 if u["section"] == "Elective"
             ]
@@ -157,8 +173,8 @@ class DtwdClient:
             detail_html
         )
 
-        print(
-            f"Extracted {len(units)} units"
+        packaging = self.extract_packaging_rules(
+            detail_html
         )
 
         return {
@@ -203,12 +219,27 @@ class DtwdClient:
                 detail_html
             ),
 
-            "coreUnits": [
+           "packagingRules":
+                packaging["packagingRules"],
+
+            "totalUnits":
+                packaging["totalUnits"],
+
+            "coreUnits":
+                packaging["coreUnits"],
+
+            "electiveUnits":
+                packaging["electiveUnits"],
+
+            "requiredSpecialisationUnits":
+                packaging["requiredSpecialisationUnits"],
+
+            "coreUnitList": [
                 u for u in units
                 if u["section"] == "Core"
             ],
 
-            "electiveUnits": [
+            "electiveUnitList": [
                 u for u in units
                 if u["section"] == "Elective"
             ]
@@ -587,3 +618,101 @@ class DtwdClient:
         )
 
         return text
+
+    def extract_packaging_rules(
+        self,
+        detail_html
+    ):
+
+        doc = lxml_html.fromstring(
+            detail_html
+        )
+
+        result = {
+            "packagingRules": None,
+            "totalUnits": None,
+            "coreUnits": None,
+            "electiveUnits": None,
+            "requiredSpecialisationUnits": None
+        }
+
+        heading = doc.xpath(
+            "//h5[contains(normalize-space(.), 'Packaging Rules')]"
+        )
+
+        if not heading:
+            return result
+
+        heading = heading[0]
+
+        rule_div = heading.getnext()
+
+        if rule_div is None:
+            return result
+
+        rules_text = " ".join(
+            text.strip()
+            for text in rule_div.xpath(".//text()")
+            if text.strip()
+        )
+
+        result["packagingRules"] = rules_text
+
+        #
+        # Total number of units = twenty (20)
+        #
+        match = re.search(
+            r"total number of units\s*=\s*.*?\((\d+)\)",
+            rules_text,
+            re.IGNORECASE
+        )
+
+        if match:
+            result["totalUnits"] = int(
+                match.group(1)
+            )
+
+        #
+        # six (6) core units
+        #
+        match = re.search(
+            r"\((\d+)\)\s*core units",
+            rules_text,
+            re.IGNORECASE
+        )
+
+        if match:
+            result["coreUnits"] = int(
+                match.group(1)
+            )
+
+        #
+        # fourteen (14) elective units
+        #
+        match = re.search(
+            r"\((\d+)\)\s*elective units",
+            rules_text,
+            re.IGNORECASE
+        )
+
+        if match:
+            result["electiveUnits"] = int(
+                match.group(1)
+            )
+
+        #
+        # select all five (5) elective units
+        # select all six (6) elective units
+        #
+        match = re.search(
+            r"select all.*?\((\d+)\)\s*elective units",
+            rules_text,
+            re.IGNORECASE
+        )
+
+        if match:
+            result["requiredSpecialisationUnits"] = int(
+                match.group(1)
+            )
+
+        return result

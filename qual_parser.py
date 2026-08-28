@@ -65,6 +65,10 @@ class QualParser:
         )
 
         return {
+
+            #
+            # Qualification
+            #
             "type":
                 dtwd.get("type"),
 
@@ -97,14 +101,49 @@ class QualParser:
             "detailUrl":
                 dtwd.get("detailUrl"),
 
-            "pathways":
-                dtwd.get("pathways", []),
+            #
+            # Packaging Rules
+            #
+            "packagingRules":
+                dtwd.get("packagingRules"),
 
+            "totalUnits":
+                dtwd.get("totalUnits"),
+
+            "coreUnitCount":
+                dtwd.get("coreUnits"),
+
+            "electiveUnitCount":
+                dtwd.get("electiveUnits"),
+
+            "requiredSpecialisationUnits":
+                dtwd.get(
+                    "requiredSpecialisationUnits"
+                ),
+
+            #
+            # Pathways / Streams
+            #
+            "pathways":
+                dtwd.get(
+                    "pathways",
+                    []
+                ),
+
+            #
+            # Units
+            #
             "coreUnits":
-                dtwd.get("coreUnits", []),
+                dtwd.get(
+                    "coreUnitList",
+                    []
+                ),
 
             "electiveUnits":
-                dtwd.get("electiveUnits", [])
+                dtwd.get(
+                    "electiveUnitList",
+                    []
+                )
         }
 
     #
