@@ -101,28 +101,11 @@ class QualParser:
             "detailUrl":
                 dtwd.get("detailUrl"),
 
-            #
-            # Packaging Rules
-            #
             "packagingRules":
                 dtwd.get("packagingRules"),
 
-            "totalUnits":
-                dtwd.get("totalUnits"),
-
-            "coreUnitCount":
-                dtwd.get("coreUnits"),
-
-            "electiveUnitCount":
-                dtwd.get("electiveUnits"),
-
-            "requiredSpecialisationUnits":
-                dtwd.get(
-                    "requiredSpecialisationUnits"
-                ),
-
             #
-            # Pathways / Streams
+            # Pathways
             #
             "pathways":
                 dtwd.get(
@@ -133,17 +116,29 @@ class QualParser:
             #
             # Units
             #
+            "coreUnitCount":
+                dtwd.get("coreUnitCount"),
+
+            "electiveUnitCount":
+                dtwd.get("electiveUnitCount"),
+
+            "totalUnitCount":
+                dtwd.get("totalUnitCount"),
+
+            "requiredSpecialisationUnitCount":
+                dtwd.get("requiredSpecialisationUnitCount"),
+
             "coreUnits":
                 dtwd.get(
-                    "coreUnitList",
+                    "coreUnits",
                     []
                 ),
 
             "electiveUnits":
                 dtwd.get(
-                    "electiveUnitList",
+                    "electiveUnits",
                     []
-                )
+                )            
         }
 
     #

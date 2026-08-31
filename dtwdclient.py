@@ -94,7 +94,7 @@ class DtwdClient:
 
         return {
             "type": "Qualification",
-            "guid": self.extract_guid(
+            "qualificationId": self.extract_guid(
                 detail_url
             ),
             "nationalCode": self.extract_value(
@@ -137,24 +137,24 @@ class DtwdClient:
             "packagingRules":
                 packaging["packagingRules"],
 
-            "totalUnits":
+            "totalUnitCount":
                 packaging["totalUnits"],
 
-            "coreUnits":
+            "coreUnitCount":
                 packaging["coreUnits"],
 
-            "electiveUnits":
+            "electiveUnitCount":
                 packaging["electiveUnits"],
 
-            "requiredSpecialisationUnits":
+            "requiredSpecialisationUnitCount":
                 packaging["requiredSpecialisationUnits"],
 
-            "coreUnitList": [
+            "coreUnits": [
                 u for u in units
                 if u["section"] == "Core"
             ],
 
-            "electiveUnitList": [
+            "electiveUnits": [
                 u for u in units
                 if u["section"] == "Elective"
             ]
@@ -179,7 +179,7 @@ class DtwdClient:
 
         return {
             "type": "AccreditedCourse",
-            "guid": self.extract_guid(
+            "courseId": self.extract_guid(
                 detail_url
             ),
             "nationalCode": self.extract_value(
@@ -222,27 +222,28 @@ class DtwdClient:
            "packagingRules":
                 packaging["packagingRules"],
 
-            "totalUnits":
+            "totalUnitCount":
                 packaging["totalUnits"],
 
-            "coreUnits":
+            "coreUnitCount":
                 packaging["coreUnits"],
 
-            "electiveUnits":
+            "electiveUnitCount":
                 packaging["electiveUnits"],
 
-            "requiredSpecialisationUnits":
+            "requiredSpecialisationUnitCount":
                 packaging["requiredSpecialisationUnits"],
 
-            "coreUnitList": [
+            "coreUnits": [
                 u for u in units
                 if u["section"] == "Core"
             ],
 
-            "electiveUnitList": [
+            "electiveUnits": [
                 u for u in units
                 if u["section"] == "Elective"
             ]
+
         }
 
     #
@@ -359,6 +360,9 @@ class DtwdClient:
 
             pathways.append(
                 {
+                    "pathwayId": self.extract_guid(
+                        pathway_url
+                    ),
                     "stateCode": state_code,
                     "streamName": stream_name,
                     "pathwayUrl": pathway_url
@@ -659,10 +663,10 @@ class DtwdClient:
         result["packagingRules"] = rules_text
 
         #
-        # Total number of units = twenty (20)
+        # Total Units
         #
         match = re.search(
-            r"total number of units\s*=\s*.*?\((\d+)\)",
+            r'complete.*?\((\d+)\)\s*units',
             rules_text,
             re.IGNORECASE
         )
@@ -673,10 +677,10 @@ class DtwdClient:
             )
 
         #
-        # six (6) core units
+        # Core Units
         #
         match = re.search(
-            r"\((\d+)\)\s*core units",
+            r'\((\d+)\)\s*core units',
             rules_text,
             re.IGNORECASE
         )
@@ -687,10 +691,10 @@ class DtwdClient:
             )
 
         #
-        # fourteen (14) elective units
+        # Elective Units
         #
         match = re.search(
-            r"\((\d+)\)\s*elective units",
+            r'\((\d+)\)\s*elective units',
             rules_text,
             re.IGNORECASE
         )
@@ -701,11 +705,10 @@ class DtwdClient:
             )
 
         #
-        # select all five (5) elective units
-        # select all six (6) elective units
+        # Accredited Course wording
         #
         match = re.search(
-            r"select all.*?\((\d+)\)\s*elective units",
+            r'minimum of.*?\((\d+)\)\s*units\s*must\s*be\s*selected',
             rules_text,
             re.IGNORECASE
         )
@@ -714,5 +717,21 @@ class DtwdClient:
             result["requiredSpecialisationUnits"] = int(
                 match.group(1)
             )
+
+        #
+        # Qualification Pathway wording
+        #
+        if result["requiredSpecialisationUnits"] is None:
+
+            match = re.search(
+                r'select all.*?\((\d+)\)\s*elective units',
+                rules_text,
+                re.IGNORECASE
+            )
+
+            if match:
+                result["requiredSpecialisationUnits"] = int(
+                    match.group(1)
+                )
 
         return result
